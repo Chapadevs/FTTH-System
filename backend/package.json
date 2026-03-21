@@ -1,0 +1,33 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "seed": "node prisma/seed.js",
+    "studio": "prisma studio"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "@google-cloud/storage": "^7.14.0",
+    "@prisma/client": "^6.0.0",
+    "@trpc/server": "^11.0.0",
+    "adm-zip": "^0.5.16",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.0.0"
+  }
+}

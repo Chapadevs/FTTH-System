@@ -1,0 +1,17 @@
+{
+  "name": "fiberops",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "build": "npm run build -w frontend",
+    "db:generate": "npm run generate -w backend",
+    "db:migrate": "npm run migrate -w backend",
+    "db:migrate:dev": "npm run migrate:dev -w backend",
+    "db:seed": "npm run seed -w backend",
+    "db:studio": "npm run studio -w backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

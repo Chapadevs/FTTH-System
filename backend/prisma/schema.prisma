@@ -1,0 +1,97 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  // Avoid Windows EPERM on query_engine rename in hoisted node_modules/.prisma (OneDrive / file locks)
+  output   = "../src/generated/prisma"
+}
+
+model User {
+  id          String    @id @default(cuid())
+  firebaseUid String    @unique
+  email       String    @unique
+  name        String
+  role        Role      @default(FIELD_TECH)
+  createdAt   DateTime  @default(now())
+  projects    Project[]
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  prismId        String
+  name           String
+  node           String
+  instance       String
+  status         ProjectStatus @default(PENDING)
+  totalPassings  Int           @default(0)
+  sourceFilePath String?
+  createdAt      DateTime      @default(now())
+  createdById    String
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  poles          Pole[]
+  equipment      Equipment[]
+  segments       FiberSegment[]
+}
+
+model Pole {
+  id           String         @id @default(cuid())
+  poleNumber   String
+  lat          Float
+  lng          Float
+  streetName   String?
+  status       PoleStatus     @default(PLANNED)
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segmentsFrom FiberSegment[] @relation("FromPole")
+  segmentsTo   FiberSegment[] @relation("ToPole")
+  equipment    Equipment[]
+}
+
+model FiberSegment {
+  id         String  @id @default(cuid())
+  lengthFt   Float
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromPoleId String
+  fromPole   Pole    @relation("FromPole", fields: [fromPoleId], references: [id])
+  toPoleId   String
+  toPole     Pole    @relation("ToPole", fields: [toPoleId], references: [id])
+}
+
+model Equipment {
+  id           String    @id @default(cuid())
+  tag          String
+  name         String
+  manufacturer String
+  model        String
+  equipType    EquipType
+  portCount    Int?
+  poleId       String
+  pole         Pole     @relation(fields: [poleId], references: [id])
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  FIELD_TECH
+}
+enum ProjectStatus {
+  PENDING
+  PROCESSING
+  ACTIVE
+  ARCHIVED
+}
+enum PoleStatus {
+  PLANNED
+  ACTIVE
+  DECOMMISSIONED
+}
+enum EquipType {
+  SPLITTER
+  TERMINATION
+}
