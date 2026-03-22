@@ -36,6 +36,8 @@ npm run dev
 - **Web (Vite)**: http://localhost:8080
 - **API (Express)**: http://localhost:3000/health
 
+**`npm run dev`** starts both the frontend and backend. Both must run for the app to work—the frontend proxies API requests to the backend. If you see connection errors, run `npm run dev` from the project root (not inside `frontend` or `backend` alone).
+
 Note: Ensure Docker is running before `docker compose up -d`. If Postgres is not available, migrations and seed will fail. Imports and other authenticated API calls require at least one user—**`npm run db:seed`** creates `admin@fiberops.com` and sample data; skipping seed leads to `UNAUTHORIZED` on import.
 
 ### Windows: Prisma `EPERM` / `query_engine-windows.dll.node`

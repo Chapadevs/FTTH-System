@@ -70,8 +70,7 @@ function MapLayers({ onSelect, projectIds, showPoles, showEquipment, showRoutes 
   );
 }
 
-export default function MapInner({ onSelect }) {
-  const [visibleProjects, setVisibleProjects] = useState([]);
+export default function MapInner({ onSelect, projectIds }) {
   const [showPoles, setShowPoles] = useState(true);
   const [showEquipment, setShowEquipment] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
@@ -86,7 +85,7 @@ export default function MapInner({ onSelect }) {
       >
         <MapLayers
           onSelect={onSelect}
-          projectIds={visibleProjects}
+          projectIds={projectIds}
           showPoles={showPoles}
           showEquipment={showEquipment}
           showRoutes={showRoutes}

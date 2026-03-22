@@ -1,8 +1,13 @@
-export function DetailSheet({ selected, onClose }) {
+export function DetailSheet({ selected, onClose, fiberResult, completedVisits }) {
   if (!selected) return null;
 
   const isPole = selected.type === "pole";
   const data = selected.data;
+
+  const visitForPole = fiberResult?.visitPlan?.visits?.find(
+    (v) => v.location === data?.poleNumber || v.location === data?.id
+  );
+  const poleCompleted = visitForPole && completedVisits?.has(visitForPole.location);
 
   return (
     <div
@@ -54,9 +59,25 @@ export function DetailSheet({ selected, onClose }) {
             <p style={{ margin: "0 0 0.5rem 0" }}>
               <strong>Status:</strong> {data?.status}
             </p>
-            <p style={{ margin: 0 }}>
+            <p style={{ margin: "0 0 0.5rem 0" }}>
               <strong>Coordinates:</strong> {data?.lat}, {data?.lng}
             </p>
+            {visitForPole && (
+              <div style={{ marginTop: "1rem", padding: "0.75rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                <strong style={{ fontSize: "0.8rem" }}>Fiber actions at this pole</strong>
+                {poleCompleted && <span style={{ marginLeft: "0.5rem", color: "#15803d", fontSize: "0.8rem" }}>Done</span>}
+                {visitForPole.actions.map((a, i) => (
+                  <div key={i} style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#166534" }}>
+                    {a.instruction}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!visitForPole && fiberResult && (
+              <p style={{ marginTop: "1rem", fontSize: "0.8rem", color: "#64748b" }}>
+                No active fibers at this pole in current plan
+              </p>
+            )}
           </>
         ) : (
           <>

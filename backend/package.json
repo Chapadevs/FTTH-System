@@ -9,21 +9,23 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js",
+    "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js src/services/fiber-assignment-engine.test.js src/services/import-buffer-loader.test.js src/services/project-import.test.js",
     "generate": "prisma generate",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "seed": "node prisma/seed.js",
+    "clear-data": "node prisma/clear-data.js",
     "studio": "prisma studio"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
     "@google-cloud/storage": "^7.14.0",
     "@prisma/client": "^6.0.0",
     "@trpc/server": "^11.0.0",
     "adm-zip": "^0.5.16",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "multer": "^2.1.1",
     "xlsx": "^0.18.5",
     "zod": "^3.23.0"
   },

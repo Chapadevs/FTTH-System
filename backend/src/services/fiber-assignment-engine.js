@@ -1,0 +1,225 @@
+/**
+ * Fiber Assignment Engine — parses fiber export data, classifies active/dark fibers,
+ * detects inconsistencies, and produces technician-ready visit plans with 12-color ordering.
+ */
+
+const FIBER_COLORS = [
+  "BLUE",
+  "ORANGE",
+  "GREEN",
+  "BROWN",
+  "SLATE",
+  "WHITE",
+  "RED",
+  "BLACK",
+  "YELLOW",
+  "VIOLET",
+  "PINK",
+  "AQUA",
+];
+
+const COLOR_CODE_MAP = {
+  BL: 0,
+  OR: 1,
+  GR: 2,
+  BR: 3,
+  SL: 4,
+  WH: 5,
+  RD: 6,
+  BK: 7,
+  YE: 8,
+  VI: 9,
+  RS: 10,
+  AQ: 11,
+};
+
+function normalizeColorCode(raw) {
+  if (raw == null || typeof raw !== "string") return null;
+  const code = String(raw).trim().toUpperCase().slice(0, 2);
+  return COLOR_CODE_MAP[code] !== undefined ? code : null;
+}
+
+function parseConnection(raw) {
+  if (raw == null || typeof raw !== "string") return "DARK";
+  const s = String(raw).trim().toUpperCase();
+  if (s.includes("FUSION") || s === "<- FUSION ->") return "FUSION";
+  return "DARK";
+}
+
+function rowToFiberRecord(row, getColumn) {
+  const bufferRaw = getColumn(row, "buffer", "BUFFER");
+  const fiberRaw = getColumn(row, "fiber", "FIBER");
+  const connectionRaw = getColumn(row, "connection", "CONNECTION");
+  const wavelengthRaw = getColumn(row, "wavelength", "WAVELENGTH");
+  const deviceRaw = getColumn(row, "device", "DEVICE NAME", "DEVICE");
+  const portRaw = getColumn(row, "port", "PORT NAME", "PORT");
+  const sheathRaw = getColumn(row, "sheath", "SHEATH NAME", "SHEATH");
+  const startRaw = getColumn(row, "start", "START ENCLOSURE", "START");
+  const endRaw = getColumn(row, "end", "END ENCLOSURE", "END");
+
+  const bufferCode = normalizeColorCode(bufferRaw);
+  const fiberCode = normalizeColorCode(fiberRaw);
+  if (!bufferCode || !fiberCode) return null;
+
+  const bufferIndex = COLOR_CODE_MAP[bufferCode];
+  const fiberIndex = COLOR_CODE_MAP[fiberCode];
+  const connectionType = parseConnection(connectionRaw);
+  const wavelength = wavelengthRaw != null && wavelengthRaw !== "" && wavelengthRaw !== "N/A"
+    ? parseFloat(String(wavelengthRaw)) || null
+    : null;
+
+  return {
+    sheathName: sheathRaw ? String(sheathRaw).trim() : null,
+    startEnclosure: startRaw ? String(startRaw).trim() : null,
+    endEnclosure: endRaw ? String(endRaw).trim() : null,
+    bufferColor: FIBER_COLORS[bufferIndex],
+    fiberColor: FIBER_COLORS[fiberIndex],
+    bufferIndex,
+    fiberIndex,
+    connectionType,
+    wavelength,
+    deviceName: deviceRaw ? String(deviceRaw).trim() : null,
+    portName: portRaw ? String(portRaw).trim() : null,
+  };
+}
+
+/**
+ * Build a column getter from header row (array of strings)
+ */
+function buildColumnGetter(headers) {
+  const normalized = headers.map((h) =>
+    String(h ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\-\.]+/g, "_")
+      .replace(/[^a-z0-9_]/g, "")
+  );
+  return (row, ...candidates) => {
+    for (const c of candidates) {
+      const key = c
+        .trim()
+        .toLowerCase()
+        .replace(/[\s\-\.]+/g, "_")
+        .replace(/[^a-z0-9_]/g, "");
+      const idx = normalized.findIndex((h) => h === key || (h && key && h.includes(key)));
+      if (idx >= 0 && row[idx] != null && row[idx] !== "") return row[idx];
+    }
+    return null;
+  };
+}
+
+/**
+ * Process raw rows (array of arrays, first row = headers) into fiber records.
+ */
+export function parseFiberRows(rows) {
+  if (!rows || rows.length < 2) return { records: [], warnings: [] };
+  const headerRow = rows[0];
+  const getColumn = buildColumnGetter(headerRow);
+  const records = [];
+  const warnings = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const rec = rowToFiberRecord(rows[i], getColumn);
+    if (rec) records.push(rec);
+  }
+
+  return { records, warnings };
+}
+
+/**
+ * Classify fibers and detect inconsistencies.
+ */
+export function computeAssignmentSummary(records) {
+  const bySheath = new Map();
+  let activeCount = 0;
+  let darkCount = 0;
+  const inconsistencies = [];
+
+  for (const r of records) {
+    const key = r.sheathName || "unknown";
+    if (!bySheath.has(key)) {
+      bySheath.set(key, { active: 0, dark: 0, fibers: [] });
+    }
+    const bag = bySheath.get(key);
+    bag.fibers.push(r);
+
+    const isFusion = r.connectionType === "FUSION";
+    const hasWavelength = r.wavelength != null;
+
+    if (isFusion) {
+      activeCount++;
+      bag.active++;
+      if (!hasWavelength) {
+        inconsistencies.push({
+          type: "FUSION_WITHOUT_WAVELENGTH",
+          sheath: key,
+          fiber: `${r.bufferColor}/${r.fiberColor}`,
+          message: `Fused fiber ${r.fiberColor} in ${r.bufferColor} tube has no wavelength`,
+        });
+      }
+    } else {
+      darkCount++;
+      bag.dark++;
+      if (hasWavelength) {
+        inconsistencies.push({
+          type: "WAVELENGTH_WITHOUT_FUSION",
+          sheath: key,
+          fiber: `${r.bufferColor}/${r.fiberColor}`,
+          message: `Dark fiber ${r.fiberColor} has wavelength assigned`,
+        });
+      }
+    }
+  }
+
+  return {
+    bySheath: Object.fromEntries(bySheath),
+    activeCount,
+    darkCount,
+    inconsistencies,
+    totalFiberColors: 12,
+  };
+}
+
+/**
+ * Build an ordered visit plan: which poles to visit and what to do at each.
+ */
+export function buildVisitPlan(records) {
+  const byLocation = new Map();
+
+  for (const r of records) {
+    if (r.connectionType !== "FUSION") continue;
+    for (const loc of [r.startEnclosure, r.endEnclosure]) {
+      if (!loc) continue;
+      if (!byLocation.has(loc)) {
+        byLocation.set(loc, { location: loc, actions: [] });
+      }
+      byLocation.get(loc).actions.push({
+        sheath: r.sheathName,
+        bufferColor: r.bufferColor,
+        fiberColor: r.fiberColor,
+        deviceName: r.deviceName,
+        portName: r.portName,
+        wavelength: r.wavelength,
+        instruction: `Fuse ${r.fiberColor} fiber in ${r.bufferColor} tube${r.deviceName ? ` → ${r.deviceName}` : ""}${r.portName ? ` ${r.portName}` : ""}`,
+      });
+    }
+  }
+
+  const visits = Array.from(byLocation.values()).sort((a, b) =>
+    String(a.location).localeCompare(b.location)
+  );
+
+  return { visits, orderedByLocation: true };
+}
+
+/**
+ * Get the 12-color sequence for display/ordering.
+ */
+export function getFiberColorSequence() {
+  return [...FIBER_COLORS];
+}
+
+export function getFiberColorIndex(colorName) {
+  const idx = FIBER_COLORS.indexOf(String(colorName).toUpperCase());
+  return idx >= 0 ? idx : null;
+}

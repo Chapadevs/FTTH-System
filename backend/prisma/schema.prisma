@@ -28,26 +28,29 @@ model Project {
   status         ProjectStatus @default(PENDING)
   totalPassings  Int           @default(0)
   sourceFilePath String?
+  importMetadata Json?
   createdAt      DateTime      @default(now())
   createdById    String
   createdBy      User          @relation(fields: [createdById], references: [id])
   poles          Pole[]
   equipment      Equipment[]
   segments       FiberSegment[]
+  sheaths        Sheath[]
 }
 
 model Pole {
-  id           String         @id @default(cuid())
-  poleNumber   String
-  lat          Float
-  lng          Float
-  streetName   String?
-  status       PoleStatus     @default(PLANNED)
-  projectId    String
-  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  segmentsFrom FiberSegment[] @relation("FromPole")
-  segmentsTo   FiberSegment[] @relation("ToPole")
-  equipment    Equipment[]
+  id               String            @id @default(cuid())
+  poleNumber       String
+  lat              Float
+  lng              Float
+  streetName       String?
+  status           PoleStatus         @default(PLANNED)
+  projectId        String
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segmentsFrom     FiberSegment[]     @relation("FromPole")
+  segmentsTo       FiberSegment[]     @relation("ToPole")
+  equipment        Equipment[]
+  sheathEndpoints  SheathEndpoint[]
 }
 
 model FiberSegment {
@@ -62,17 +65,116 @@ model FiberSegment {
 }
 
 model Equipment {
-  id           String    @id @default(cuid())
-  tag          String
+  id              String           @id @default(cuid())
+  tag             String
+  name            String
+  manufacturer    String
+  model           String
+  equipType       EquipType
+  portCount       Int?
+  poleId          String
+  pole            Pole             @relation(fields: [poleId], references: [id])
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fiberAssignments FiberAssignment[]
+}
+
+model Sheath {
+  id           String          @id @default(cuid())
   name         String
-  manufacturer String
-  model        String
-  equipType    EquipType
-  portCount    Int?
-  poleId       String
-  pole         Pole     @relation(fields: [poleId], references: [id])
   projectId    String
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  endpoints    SheathEndpoint[]
+  fiberRecords FiberRecord[]
+
+  @@index([projectId])
+}
+
+model SheathEndpoint {
+  id        String        @id @default(cuid())
+  sheathId  String
+  sheath    Sheath        @relation(fields: [sheathId], references: [id], onDelete: Cascade)
+  poleId    String
+  pole      Pole          @relation(fields: [poleId], references: [id])
+  role      EndpointRole
+  createdAt DateTime      @default(now())
+
+  @@unique([sheathId, poleId, role])
+  @@index([sheathId])
+  @@index([poleId])
+}
+
+model FiberRecord {
+  id              String           @id @default(cuid())
+  sheathId        String
+  sheath          Sheath           @relation(fields: [sheathId], references: [id], onDelete: Cascade)
+  bufferColor     FiberColor
+  fiberColor      FiberColor
+  bufferIndex     Int
+  fiberIndex      Int
+  direction       FiberDirection?
+  wavelength      Float?
+  connectionType  ConnectionType
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  assignments     FiberAssignment[]
+
+  @@unique([sheathId, bufferIndex, fiberIndex])
+  @@index([sheathId])
+}
+
+model FiberAssignment {
+  id            String           @id @default(cuid())
+  fiberRecordId String
+  fiberRecord   FiberRecord      @relation(fields: [fiberRecordId], references: [id], onDelete: Cascade)
+  equipmentId   String?
+  equipment     Equipment?       @relation(fields: [equipmentId], references: [id])
+  deviceName    String?
+  portName      String?
+  status        AssignmentStatus
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([fiberRecordId])
+  @@index([equipmentId])
+}
+
+enum EndpointRole {
+  START
+  END
+}
+
+enum FiberColor {
+  BLUE
+  ORANGE
+  GREEN
+  BROWN
+  SLATE
+  WHITE
+  RED
+  BLACK
+  YELLOW
+  VIOLET
+  PINK
+  AQUA
+}
+
+enum FiberDirection {
+  FORWARD
+  RETURN
+}
+
+enum ConnectionType {
+  FUSION
+  DARK
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  DARK
+  INCONSISTENT
 }
 
 enum Role {

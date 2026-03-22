@@ -7,6 +7,9 @@ import { DetailSheet } from "../components/detail/DetailSheet.jsx";
 export function MapPage() {
   const [selected, setSelected] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [visibleProjectIds, setVisibleProjectIds] = useState([]);
+  const [fiberResult, setFiberResult] = useState(null);
+  const [completedVisits] = useState(new Set());
 
   return (
     <div style={{ position: "relative", height: "calc(100vh - 2rem)" }}>
@@ -20,10 +23,15 @@ export function MapPage() {
           padding: "0.75rem",
           borderRadius: "8px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          maxWidth: "240px",
+          maxWidth: "280px",
+          maxHeight: "calc(100vh - 4rem)",
+          overflowY: "auto",
         }}
       >
-        <ProjectList />
+        <ProjectList
+          visibleProjectIds={visibleProjectIds}
+          onVisibleChange={setVisibleProjectIds}
+        />
       </div>
       <button
         onClick={() => setImportOpen(true)}
@@ -41,11 +49,23 @@ export function MapPage() {
           fontWeight: 500,
         }}
       >
-        Import Data
+        Import & Process
       </button>
-      <MapView onSelect={setSelected} />
-      <DetailSheet selected={selected} onClose={() => setSelected(null)} />
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <MapView
+        onSelect={setSelected}
+        projectIds={visibleProjectIds?.length ? visibleProjectIds : undefined}
+      />
+      <DetailSheet
+        selected={selected}
+        onClose={() => setSelected(null)}
+        fiberResult={fiberResult}
+        completedVisits={completedVisits}
+      />
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={setFiberResult}
+      />
     </div>
   );
 }

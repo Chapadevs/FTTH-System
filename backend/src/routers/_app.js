@@ -5,6 +5,7 @@ import { equipmentRouter } from "./equipment.js";
 import { uploadsRouter } from "./uploads.js";
 import { usersRouter } from "./users.js";
 import { mapRouter } from "./map.js";
+import { fibersRouter } from "./fibers.js";
 
 export const appRouter = router({
   projects: projectsRouter,
@@ -13,4 +14,5 @@ export const appRouter = router({
   uploads: uploadsRouter,
   users: usersRouter,
   map: mapRouter,
+  fibers: fibersRouter,
 });

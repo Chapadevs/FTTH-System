@@ -9,3 +9,4 @@ frontend/dist
 coverage
 *.log
 .DS_Store
+backend/.local-imports
