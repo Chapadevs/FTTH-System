@@ -8,8 +8,6 @@ export function MapPage() {
   const [selected, setSelected] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [visibleProjectIds, setVisibleProjectIds] = useState([]);
-  const [fiberResult, setFiberResult] = useState(null);
-  const [completedVisits] = useState(new Set());
 
   return (
     <div style={{ position: "relative", height: "calc(100vh - 2rem)" }}>
@@ -58,13 +56,10 @@ export function MapPage() {
       <DetailSheet
         selected={selected}
         onClose={() => setSelected(null)}
-        fiberResult={fiberResult}
-        completedVisits={completedVisits}
       />
       <ImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={setFiberResult}
       />
     </div>
   );

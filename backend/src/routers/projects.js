@@ -8,6 +8,7 @@ import {
   parseImportFile,
   persistParsedImport,
 } from "../services/project-import.js";
+import { enrichProjectPoleStreetNames } from "../services/reverse-geocode.js";
 
 const EXCEL_EXT = /\.(xlsx|xls)$/i;
 const ZIP_EXT = /\.zip$/i;
@@ -93,6 +94,10 @@ export const projectsRouter = router({
           timeout: 60_000,
         }
       );
+
+      void enrichProjectPoleStreetNames(prisma, result.project.id).catch((error) => {
+        console.warn("Street enrichment failed for project", result.project.id, error?.message || error);
+      });
 
       return result;
     }),

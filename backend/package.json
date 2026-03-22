@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js src/services/fiber-assignment-engine.test.js src/services/import-buffer-loader.test.js src/services/project-import.test.js",
+    "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js src/services/fiber-assignment-engine.test.js src/services/import-buffer-loader.test.js src/services/project-import.test.js src/services/pole-detail.test.js src/services/reverse-geocode.test.js",
     "generate": "prisma generate",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
