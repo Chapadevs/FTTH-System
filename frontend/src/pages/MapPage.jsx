@@ -10,19 +10,27 @@ export function MapPage() {
   const [visibleProjectIds, setVisibleProjectIds] = useState([]);
 
   return (
-    <div style={{ position: "relative", height: "calc(100vh - 2rem)" }}>
+    <div
+      style={{
+        height: "calc(100vh - 2rem)",
+        minHeight: 0,
+        position: "relative",
+        borderRadius: "12px",
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
           position: "absolute",
           top: "1rem",
           left: "1rem",
-          zIndex: 1000,
+          zIndex: 700,
+          width: "220px",
+          maxHeight: "calc(100% - 2rem)",
           background: "white",
-          padding: "0.75rem",
-          borderRadius: "8px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          maxWidth: "280px",
-          maxHeight: "calc(100vh - 4rem)",
+          padding: "0.55rem",
+          borderRadius: "10px",
+          boxShadow: "0 6px 14px rgba(15, 23, 42, 0.08)",
           overflowY: "auto",
         }}
       >
@@ -37,26 +45,41 @@ export function MapPage() {
           position: "absolute",
           top: "1rem",
           right: "1rem",
-          zIndex: 1000,
-          padding: "0.5rem 1rem",
+          zIndex: 800,
+          padding: "0.38rem 0.72rem",
           background: "#0f172a",
           color: "white",
           border: "none",
-          borderRadius: "6px",
+          borderRadius: "999px",
           cursor: "pointer",
-          fontWeight: 500,
+          fontWeight: 700,
+          fontSize: "0.76rem",
+          letterSpacing: "0.02em",
+          boxShadow: "0 6px 14px rgba(15, 23, 42, 0.14)",
         }}
       >
-        Import & Process
+        Import
       </button>
-      <MapView
-        onSelect={setSelected}
-        projectIds={visibleProjectIds?.length ? visibleProjectIds : undefined}
-      />
-      <DetailSheet
-        selected={selected}
-        onClose={() => setSelected(null)}
-      />
+      <div
+        style={{
+          position: "relative",
+          minWidth: 0,
+          minHeight: 0,
+          height: "100%",
+        }}
+      >
+        <MapView
+          onSelect={setSelected}
+          projectIds={visibleProjectIds?.length ? visibleProjectIds : undefined}
+          selected={selected}
+        />
+      </div>
+      {selected?.type !== "pole" && (
+        <DetailSheet
+          selected={selected}
+          onClose={() => setSelected(null)}
+        />
+      )}
       <ImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}

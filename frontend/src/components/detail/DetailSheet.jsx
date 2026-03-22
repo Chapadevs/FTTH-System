@@ -311,7 +311,7 @@ function ActionCard({ action, index }) {
   );
 }
 
-function PoleDetailContent({ data }) {
+export function PoleDetailContent({ data, compact = false }) {
   const poleDetailQuery = useQuery({
     ...trpc.poles.getDetail.queryOptions({ poleId: data?.id ?? "" }),
     enabled: !!data?.id,
@@ -328,7 +328,7 @@ function PoleDetailContent({ data }) {
     <>
       <div
         style={{
-          padding: "0.85rem",
+          padding: compact ? "0.75rem" : "0.85rem",
           borderRadius: "14px",
           background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
           border: "1px solid #e2e8f0",
@@ -373,6 +373,50 @@ function PoleDetailContent({ data }) {
             <SummaryCard label="Sheaths" value={poleDetail.summary.sheathCount} tone="neutral" />
           </div>
 
+          {compact ? (
+            <>
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.85rem",
+                  borderRadius: "14px",
+                  background: poleDetail.summary.actionCount > 0 ? "#fef2f2" : "#f0fdf4",
+                  border: poleDetail.summary.actionCount > 0 ? "1px solid #fecaca" : "1px solid #bbf7d0",
+                }}
+              >
+                <SectionTitle>{poleDetail.summary.actionCount > 0 ? "Field action needed" : "Pole ready"}</SectionTitle>
+                <div
+                  style={{
+                    marginTop: "0.35rem",
+                    fontSize: "0.78rem",
+                    lineHeight: 1.45,
+                    color: poleDetail.summary.actionCount > 0 ? "#991b1b" : "#166534",
+                  }}
+                >
+                  {poleDetail.summary.actionCount > 0
+                    ? `${poleDetail.summary.inconsistentCount} fibers still need fusion across ${poleDetail.summary.sheathCount} sheaths.`
+                    : "No pending fusion work at this pole."}
+                </div>
+              </div>
+
+              {poleDetail.connectedPoles?.length > 0 && (
+                <div style={{ marginTop: "1rem" }}>
+                  <SectionTitle>Connected poles</SectionTitle>
+                  <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                    {poleDetail.connectedPoles.slice(0, 4).map((segment) => (
+                      <Badge key={segment.id} tone="neutral">
+                        {segment.pole?.poleNumber}
+                      </Badge>
+                    ))}
+                    {poleDetail.connectedPoles.length > 4 && (
+                      <Badge tone="neutral">+{poleDetail.connectedPoles.length - 4} more</Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
           {poleDetail.connectedPoles?.length > 0 && (
             <div style={{ marginTop: "1rem" }}>
               <SectionTitle>Connected poles</SectionTitle>
@@ -496,6 +540,8 @@ function PoleDetailContent({ data }) {
               </p>
             )}
           </div>
+            </>
+          )}
         </>
       )}
     </>
@@ -512,15 +558,18 @@ export function DetailSheet({ selected, onClose }) {
     <div
       style={{
         position: "absolute",
-        top: "1rem",
+        top: "4.5rem",
         right: "1rem",
-        width: "420px",
-        maxHeight: "80vh",
+        width: "360px",
+        maxWidth: "calc(100% - 2rem)",
+        maxHeight: "calc(100% - 5.5rem)",
         background: "white",
-        borderRadius: "8px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        zIndex: 1000,
-        overflow: "auto",
+        borderRadius: "12px",
+        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        zIndex: 750,
       }}
     >
       <div
@@ -530,6 +579,7 @@ export function DetailSheet({ selected, onClose }) {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
         <h3 style={{ margin: 0 }}>{isPole ? "Pole" : "Equipment"}</h3>
@@ -546,7 +596,7 @@ export function DetailSheet({ selected, onClose }) {
           ×
         </button>
       </div>
-      <div style={{ padding: "1rem" }}>
+      <div style={{ padding: "1rem", overflow: "auto", minHeight: 0 }}>
         {isPole ? (
           <PoleDetailContent data={data} />
         ) : (

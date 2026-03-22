@@ -28,13 +28,17 @@ const WORK_STYLES = {
   },
 };
 
-function createPoleIcon(pole) {
+function createPoleIcon(pole, isSelected = false) {
   const workStatus = pole?.work?.status || "NO_DATA";
   const style = WORK_STYLES[workStatus] || WORK_STYLES.NO_DATA;
   const taskCount = pole?.work?.taskCount || 0;
   const size = taskCount > 0 ? 28 : 20;
+  const markerSize = isSelected ? size + 8 : size;
   const badgeSize = taskCount > 9 ? 22 : 18;
-  const iconSize = size + 16;
+  const iconSize = markerSize + (isSelected ? 24 : 16);
+  const halo = isSelected ? "rgba(15, 23, 42, 0.22)" : style.halo;
+  const outline = isSelected ? "#f8fafc" : style.border;
+  const glow = isSelected ? "0 0 0 9px rgba(250, 204, 21, 0.45), 0 0 22px rgba(15, 23, 42, 0.28)" : `0 0 0 7px ${halo}`;
 
   return L.divIcon({
     className: "",
@@ -43,12 +47,13 @@ function createPoleIcon(pole) {
     html: `
       <div style="position: relative; width: ${iconSize}px; height: ${iconSize}px; display: flex; align-items: center; justify-content: center;">
         <div style="
-          width: ${size}px;
-          height: ${size}px;
+          width: ${markerSize}px;
+          height: ${markerSize}px;
           border-radius: 999px;
           background: ${style.fill};
-          border: 3px solid ${style.border};
-          box-shadow: 0 0 0 7px ${style.halo};
+          border: ${isSelected ? 4 : 3}px solid ${outline};
+          box-shadow: ${glow};
+          transform: ${isSelected ? "scale(1.05)" : "scale(1)"};
         "></div>
         ${
           taskCount > 0
@@ -76,7 +81,7 @@ function createPoleIcon(pole) {
   });
 }
 
-export function PoleMarker({ pole, onClick }) {
+export function PoleMarker({ pole, onClick, isSelected = false }) {
   if (pole?.lat == null || pole?.lng == null) return null;
   const lat = parseFloat(pole.lat);
   const lng = parseFloat(pole.lng);
@@ -89,7 +94,8 @@ export function PoleMarker({ pole, onClick }) {
   return (
     <Marker
       position={[lat, lng]}
-      icon={createPoleIcon(pole)}
+      icon={createPoleIcon(pole, isSelected)}
+      zIndexOffset={isSelected ? 1000 : 0}
       eventHandlers={{ click: onClick }}
     >
       <Tooltip direction="top" offset={[0, -18]}>
