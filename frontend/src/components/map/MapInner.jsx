@@ -12,6 +12,7 @@ import { EquipmentMarker } from "./EquipmentMarker.jsx";
 import { FiberPolyline } from "./FiberPolyline.jsx";
 import { LayerControls } from "./LayerControls.jsx";
 import { PoleDetailContent } from "../detail/DetailSheet.jsx";
+import { buildDirectServedPoleLookup, decorateMapPole } from "./distribution-pole.js";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -544,6 +545,7 @@ function PoleDetailPopover({ selected, position, onClose }) {
   if (selected?.type !== "pole" || !position) return null;
 
   const isRight = position.placement === "right";
+  const isDistribution = selected?.data?.distribution?.isDistribution;
 
   return (
     <div
@@ -591,7 +593,7 @@ function PoleDetailPopover({ selected, position, onClose }) {
       >
         <div>
           <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Pole
+            {isDistribution ? "Distribution" : "Pole"}
           </div>
           <div style={{ marginTop: "0.15rem", fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
             {selected?.data?.poleNumber || "Pole detail"}
@@ -678,8 +680,16 @@ export default function MapInner({ onSelect, projectIds, selected }) {
   const poles = data?.poles ?? [];
   const equipment = data?.equipment ?? [];
   const segments = data?.segments ?? [];
+  const directServedPoleLookup = useMemo(
+    () => buildDirectServedPoleLookup(poles, segments),
+    [poles, segments]
+  );
+  const decoratedPoles = useMemo(
+    () => poles.map((pole) => decorateMapPole(pole, directServedPoleLookup)),
+    [poles, directServedPoleLookup]
+  );
   const selectedPoleId = selected?.type === "pole" ? selected?.data?.id : null;
-  const searchEntries = useMemo(() => buildSearchEntries(poles), [poles]);
+  const searchEntries = useMemo(() => buildSearchEntries(decoratedPoles), [decoratedPoles]);
   const rankedResults = useMemo(() => {
     const query = searchQuery.trim();
     if (!query) return [];
@@ -701,7 +711,7 @@ export default function MapInner({ onSelect, projectIds, selected }) {
       })
       .slice(0, maxSearchResults);
   }, [searchEntries, searchQuery]);
-  const workCounts = poles.reduce(
+  const workCounts = decoratedPoles.reduce(
     (acc, pole) => {
       if ((pole?.work?.taskCount || 0) > 0) acc.needsWork += 1;
       else if (pole?.work?.status === "CONNECTED") acc.connected += 1;
@@ -711,7 +721,7 @@ export default function MapInner({ onSelect, projectIds, selected }) {
     },
     { needsWork: 0, connected: 0, darkOnly: 0, noData: 0, total: 0 }
   );
-  workCounts.total = poles.length;
+  workCounts.total = decoratedPoles.length;
 
   useEffect(() => {
     if (!rankedResults.length) {
@@ -752,7 +762,7 @@ export default function MapInner({ onSelect, projectIds, selected }) {
         <PolePopupPositionController selected={selected} onPositionChange={setPolePopupPosition} />
         <MapLayers
           onSelect={onSelect}
-          poles={poles}
+          poles={decoratedPoles}
           equipment={equipment}
           segments={segments}
           showPoles={showPoles}

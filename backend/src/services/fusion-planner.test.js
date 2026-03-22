@@ -85,4 +85,32 @@ describe("fusion-planner", () => {
     assert.strictEqual(fiber.operationalNeedFusion, true);
     assert.strictEqual(fiber.observation.state, "NEEDS_FUSION");
   });
+
+  it("counts a demanded inconsistent fiber on upstream distribution poles too", () => {
+    const pole = { id: "pole-dist", poleNumber: "MWC2302D003" };
+    const endpoint = { role: "START" };
+    const [fiber] = annotateFibersForPole({
+      pole,
+      endpoint,
+      fiberRecords: [
+        {
+          id: "fiber-upstream",
+          bufferColor: "BLUE",
+          fiberColor: "SLATE",
+          bufferIndex: 0,
+          fiberIndex: 4,
+          direction: null,
+          wavelength: null,
+          connectionType: "FUSION",
+          assignments: [
+            { id: "client-1", deviceName: "MWC23020013", portName: "PORT1", status: "INCONSISTENT" },
+            { id: "blank-1", deviceName: null, portName: null, status: "INCONSISTENT" },
+          ],
+        },
+      ],
+    });
+
+    assert.strictEqual(fiber.operationalNeedFusion, true);
+    assert.strictEqual(fiber.status, "INCONSISTENT");
+  });
 });

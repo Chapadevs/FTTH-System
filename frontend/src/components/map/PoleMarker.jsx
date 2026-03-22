@@ -28,13 +28,42 @@ const WORK_STYLES = {
   },
 };
 
+function getPoleMarkerMeta(pole) {
+  const isDistribution = pole?.distribution?.isDistribution;
+  const directServedPoleCount = pole?.distribution?.directServedPoleCount || 0;
+  const taskCount = pole?.work?.taskCount || 0;
+
+  if (isDistribution) {
+    return {
+      isDistribution,
+      badgeCount: directServedPoleCount,
+      label: "Distribution pole",
+      detail: directServedPoleCount > 0
+        ? `Sending signal directly to ${directServedPoleCount} pole${directServedPoleCount === 1 ? "" : "s"}`
+        : "No direct served poles found",
+    };
+  }
+
+  return {
+    isDistribution,
+    badgeCount: taskCount,
+    label: null,
+    detail: taskCount > 0
+      ? `${taskCount} task${taskCount > 1 ? "s" : ""} waiting at this pole`
+      : pole?.summary?.activeCount > 0
+        ? `${pole.summary.activeCount} active fiber${pole.summary.activeCount > 1 ? "s" : ""}`
+        : "No pending fiber tasks",
+  };
+}
+
 function createPoleIcon(pole, isSelected = false) {
   const workStatus = pole?.work?.status || "NO_DATA";
   const style = WORK_STYLES[workStatus] || WORK_STYLES.NO_DATA;
-  const taskCount = pole?.work?.taskCount || 0;
-  const size = taskCount > 0 ? 28 : 20;
+  const markerMeta = getPoleMarkerMeta(pole);
+  const badgeCount = markerMeta.badgeCount;
+  const size = badgeCount > 0 ? 28 : 20;
   const markerSize = isSelected ? size + 8 : size;
-  const badgeSize = taskCount > 9 ? 22 : 18;
+  const badgeSize = badgeCount > 9 ? 22 : 18;
   const iconSize = markerSize + (isSelected ? 24 : 16);
   const halo = isSelected ? "rgba(15, 23, 42, 0.22)" : style.halo;
   const outline = isSelected ? "#f8fafc" : style.border;
@@ -56,7 +85,7 @@ function createPoleIcon(pole, isSelected = false) {
           transform: ${isSelected ? "scale(1.05)" : "scale(1)"};
         "></div>
         ${
-          taskCount > 0
+          badgeCount > 0
             ? `<div style="
                 position: absolute;
                 top: -1px;
@@ -73,7 +102,7 @@ function createPoleIcon(pole, isSelected = false) {
                 line-height: ${badgeSize - 4}px;
                 text-align: center;
                 box-sizing: border-box;
-              ">${taskCount}</div>`
+              ">${badgeCount}</div>`
             : ""
         }
       </div>
@@ -89,7 +118,7 @@ export function PoleMarker({ pole, onClick, isSelected = false }) {
 
   const workStatus = pole?.work?.status || "NO_DATA";
   const style = WORK_STYLES[workStatus] || WORK_STYLES.NO_DATA;
-  const taskCount = pole?.work?.taskCount || 0;
+  const markerMeta = getPoleMarkerMeta(pole);
 
   return (
     <Marker
@@ -101,13 +130,9 @@ export function PoleMarker({ pole, onClick, isSelected = false }) {
       <Tooltip direction="top" offset={[0, -18]}>
         <div style={{ minWidth: "170px" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0f172a" }}>{pole.poleNumber}</div>
-          <div style={{ marginTop: "0.2rem", fontSize: "0.74rem", color: "#475569" }}>{style.label}</div>
+          <div style={{ marginTop: "0.2rem", fontSize: "0.74rem", color: "#475569" }}>{markerMeta.label || style.label}</div>
           <div style={{ marginTop: "0.3rem", fontSize: "0.74rem", color: "#334155" }}>
-            {taskCount > 0
-              ? `${taskCount} task${taskCount > 1 ? "s" : ""} waiting at this pole`
-              : pole?.summary?.activeCount > 0
-                ? `${pole.summary.activeCount} active fiber${pole.summary.activeCount > 1 ? "s" : ""}`
-                : "No pending fiber tasks"}
+            {markerMeta.detail}
           </div>
         </div>
       </Tooltip>

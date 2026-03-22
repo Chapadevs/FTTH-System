@@ -328,7 +328,79 @@ function ActionCard({ action, index }) {
   );
 }
 
+function DistributionPoleCompactContent({ data }) {
+  const directServedPoles = data?.distribution?.directServedPoles || [];
+
+  return (
+    <>
+      <div
+        style={{
+          padding: "0.75rem",
+          borderRadius: "14px",
+          background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <InfoLine label="Distribution" value={data?.poleNumber} />
+        <InfoLine label="Street" value={data?.streetName || "—"} />
+        <InfoLine label="Status" value={data?.status || "—"} />
+        <div style={{ marginTop: "0.55rem" }}>
+          <span style={{ display: "block", fontSize: "0.77rem", color: "#64748b", fontWeight: 600 }}>Coordinates</span>
+          <span style={{ display: "block", marginTop: "0.18rem", fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.4 }}>
+            {data?.lat}, {data?.lng}
+          </span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: "1rem",
+          padding: "0.85rem",
+          borderRadius: "14px",
+          background: "#fff7ed",
+          border: "1px solid #fdba74",
+        }}
+      >
+        <SectionTitle>Distribution output</SectionTitle>
+        <div style={{ marginTop: "0.35rem", fontSize: "0.78rem", lineHeight: 1.45, color: "#9a3412" }}>
+          This distribution pole is sending signal directly to {directServedPoles.length} pole{directServedPoles.length === 1 ? "" : "s"}.
+        </div>
+      </div>
+
+      <div style={{ marginTop: "1rem" }}>
+        <SectionTitle>Direct served poles</SectionTitle>
+        {directServedPoles.length > 0 ? (
+          <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.45rem" }}>
+            {directServedPoles.map((pole) => (
+              <div
+                key={pole.id}
+                style={{
+                  padding: "0.7rem 0.75rem",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  background: "#ffffff",
+                }}
+              >
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>{pole.poleNumber}</div>
+                <div style={{ marginTop: "0.12rem", fontSize: "0.76rem", color: "#475569" }}>{pole.streetName || "Directly connected pole"}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+            No direct served poles were found for this distribution pole.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function PoleDetailContent({ data, compact = false }) {
+  if (compact && data?.distribution?.isDistribution) {
+    return <DistributionPoleCompactContent data={data} />;
+  }
+
   const poleDetailQuery = useQuery({
     ...trpc.poles.getDetail.queryOptions({ poleId: data?.id ?? "" }),
     enabled: !!data?.id,

@@ -9,6 +9,10 @@ function hasAssignmentData(candidate) {
   return Boolean(candidate?.deviceName || candidate?.portName);
 }
 
+function getMeaningfulAssignments(fiberRecord) {
+  return (fiberRecord.assignments || []).filter(hasAssignmentData);
+}
+
 function matchesPoleAssignment(assignment, pole) {
   if (!hasAssignmentData(assignment)) return false;
 
@@ -48,8 +52,14 @@ export function getPoleFiberObservation(pole, endpoint, fiberRecord) {
   };
 }
 
-export function isOperationalNeedFusion(observation) {
-  return observation?.state === "NEEDS_FUSION" && hasAssignmentData(observation);
+export function isOperationalNeedFusion(observation, fiberRecord) {
+  if (observation?.state === "ACTIVE") return false;
+  if (observation?.state === "NEEDS_FUSION" && hasAssignmentData(observation)) return true;
+  if (!hasDataInconsistency(fiberRecord)) return false;
+
+  const demandedByAssignment = getMeaningfulAssignments(fiberRecord).length > 0;
+  const demandedByObservation = hasAssignmentData(observation);
+  return demandedByAssignment || demandedByObservation;
 }
 
 export function hasDataInconsistency(fiberRecord) {
@@ -75,8 +85,8 @@ export function annotateFibersForPole({ pole, endpoint, fiberRecords }) {
   return (fiberRecords || [])
     .map((fiberRecord) => {
       const observation = getPoleFiberObservation(pole, endpoint, fiberRecord);
-      const operationalNeedFusion = isOperationalNeedFusion(observation);
       const dataIssue = hasDataInconsistency(fiberRecord);
+      const operationalNeedFusion = isOperationalNeedFusion(observation, fiberRecord);
       const status = operationalNeedFusion
         ? "INCONSISTENT"
         : observation.state === "ACTIVE"
