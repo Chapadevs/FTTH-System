@@ -88,6 +88,6 @@ describe("pole-detail", () => {
     assert.strictEqual(detail.sheaths[0].actions.length, 1);
     assert.strictEqual(detail.work.status, "NEEDS_WORK");
     assert.strictEqual(detail.work.taskCount, 1);
-    assert.match(detail.work.nextAction, /Connect GREEN fiber in BLUE tube/i);
+    assert.match(detail.work.nextAction, /Fuse GREEN fiber in BLUE tube/i);
   });
 });

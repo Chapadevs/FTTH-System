@@ -49,7 +49,7 @@ function buildFiberAction(fiber, sheathName, role, connectedPoleNumbers) {
     ? fiber.assignments.map(buildAssignmentLabel).join(", ")
     : "missing assignment";
 
-  return `Connect ${fiber.fiberColor} fiber in ${fiber.bufferColor} tube${direction} on ${sheathLabel}${connectedLabel} (${role.toLowerCase()} end) - ${assignmentLabel}`;
+  return `Fuse ${fiber.fiberColor} fiber in ${fiber.bufferColor} tube${direction} on ${sheathLabel}${connectedLabel} (${role.toLowerCase()} end) - ${assignmentLabel}`;
 }
 
 function summarizeFibers(fibers) {

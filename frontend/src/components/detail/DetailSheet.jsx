@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "../../lib/trpc.js";
 
@@ -19,7 +18,7 @@ const FIBER_COLOR_STYLES = {
 
 const STATUS_STYLES = {
   ACTIVE: { background: "#dcfce7", border: "#86efac", text: "#166534", label: "Active" },
-  INCONSISTENT: { background: "#fee2e2", border: "#fca5a5", text: "#991b1b", label: "Issue" },
+  INCONSISTENT: { background: "#fee2e2", border: "#fca5a5", text: "#991b1b", label: "Needs fusion" },
   DARK: { background: "#e2e8f0", border: "#cbd5e1", text: "#475569", label: "Dark" },
   DEFAULT: { background: "#e2e8f0", border: "#cbd5e1", text: "#334155", label: "Unknown" },
 };
@@ -62,7 +61,7 @@ function isUuidLike(value) {
 }
 
 function parseFiberAction(action) {
-  const match = /^Connect\s+([A-Z]+)\s+fiber\s+in\s+([A-Z]+)\s+tube\s+(.+)$/i.exec(action);
+  const match = /^Fuse\s+([A-Z]+)\s+fiber\s+in\s+([A-Z]+)\s+tube\s+(.+)$/i.exec(action);
   if (!match) {
     return { description: action };
   }
@@ -90,13 +89,6 @@ function getSheathDisplayName(sheath) {
     return `Sheath to ${sheath.connectedPoleNumbers.join(", ")}`;
   }
   return sheath.name;
-}
-
-function matchesFiberFilter(fiber, filterMode) {
-  if (filterMode === "tasks") return fiber.status === "INCONSISTENT";
-  if (filterMode === "active") return fiber.status === "ACTIVE";
-  if (filterMode === "dark") return fiber.status === "DARK";
-  return true;
 }
 
 function SectionTitle({ children }) {
@@ -196,29 +188,6 @@ function Badge({ children, tone = "neutral" }) {
   );
 }
 
-function FilterPill({ label, active, onClick, tone = "neutral" }) {
-  const style = active
-    ? SUMMARY_TONES[tone] || SUMMARY_TONES.neutral
-    : { background: "#ffffff", border: "#cbd5e1", text: "#475569" };
-
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        border: `1px solid ${style.border}`,
-        background: style.background,
-        color: style.text,
-        borderRadius: "999px",
-        padding: "0.35rem 0.7rem",
-        fontSize: "0.74rem",
-        fontWeight: 700,
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function FiberRow({ fiber }) {
   const assignmentLabel = buildAssignmentLabel(fiber);
@@ -307,11 +276,11 @@ function ActionCard({ action, index }) {
       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
         {parsed.bufferColor && <ColorChip label="Tube" color={parsed.bufferColor} />}
         {parsed.fiberColor && <ColorChip label="Fiber" color={parsed.fiberColor} />}
-        <Badge tone="danger">Connect here</Badge>
+        <Badge tone="danger">Fuse here</Badge>
       </div>
 
       {parsed.route && (
-        <div style={{ marginTop: "0.55rem", fontSize: "0.8rem", fontWeight: 600, color: "#166534", lineHeight: 1.45 }}>
+        <div style={{ marginTop: "0.55rem", fontSize: "0.8rem", fontWeight: 600, color: "#991b1b", lineHeight: 1.45 }}>
           {parsed.route}
         </div>
       )}
@@ -322,10 +291,10 @@ function ActionCard({ action, index }) {
             marginTop: "0.5rem",
             padding: "0.55rem 0.65rem",
             borderRadius: "10px",
-            background: "#f0fdf4",
-            border: "1px solid #dcfce7",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
             fontSize: "0.78rem",
-            color: "#166534",
+            color: "#991b1b",
             lineHeight: 1.45,
           }}
         >
@@ -334,7 +303,7 @@ function ActionCard({ action, index }) {
       )}
 
       {!parsed.route && !parsed.assignment && (
-        <div style={{ marginTop: "0.55rem", fontSize: "0.8rem", color: "#166534", lineHeight: 1.45 }}>
+        <div style={{ marginTop: "0.55rem", fontSize: "0.8rem", color: "#991b1b", lineHeight: 1.45 }}>
           {parsed.description}
         </div>
       )}
@@ -343,12 +312,17 @@ function ActionCard({ action, index }) {
 }
 
 function PoleDetailContent({ data }) {
-  const [fiberFilter, setFiberFilter] = useState("tasks");
   const poleDetailQuery = useQuery({
     ...trpc.poles.getDetail.queryOptions({ poleId: data?.id ?? "" }),
     enabled: !!data?.id,
   });
   const poleDetail = poleDetailQuery.data;
+  const sheathsNeedingFusion = poleDetail?.sheaths
+    ?.map((sheath) => ({
+      ...sheath,
+      fusionFibers: sheath.fibers.filter((fiber) => fiber.status === "INCONSISTENT"),
+    }))
+    .filter((sheath) => sheath.fusionFibers.length > 0) ?? [];
 
   return (
     <>
@@ -395,7 +369,7 @@ function PoleDetailContent({ data }) {
           >
             <SummaryCard label="Active fibers" value={poleDetail.summary.activeCount} tone="success" />
             <SummaryCard label="Dark fibers" value={poleDetail.summary.darkCount} tone="neutral" />
-            <SummaryCard label="Issues" value={poleDetail.summary.inconsistentCount} tone="danger" />
+            <SummaryCard label="Need fusion" value={poleDetail.summary.inconsistentCount} tone="danger" />
             <SummaryCard label="Sheaths" value={poleDetail.summary.sheathCount} tone="neutral" />
           </div>
 
@@ -424,23 +398,38 @@ function PoleDetailContent({ data }) {
             </div>
           )}
 
-          {poleDetail.summary.actionCount > 0 && (
+          {poleDetail.summary.actionCount > 0 ? (
             <div
               style={{
                 marginTop: "1rem",
                 padding: "0.9rem",
-                background: "#f0fdf4",
+                background: "#fef2f2",
                 borderRadius: "14px",
-                border: "1px solid #bbf7d0",
+                border: "1px solid #fecaca",
               }}
             >
-              <SectionTitle>Tasks at this pole</SectionTitle>
-              <div style={{ marginTop: "0.3rem", fontSize: "0.76rem", color: "#166534" }}>
-                These fibers still need field work before the route is complete.
+              <SectionTitle>Fusion tasks at this pole</SectionTitle>
+              <div style={{ marginTop: "0.3rem", fontSize: "0.76rem", color: "#991b1b" }}>
+                Only the fibers below still need fusion work in the field.
               </div>
               {poleDetail.sheaths.flatMap((sheath) => sheath.actions).map((action, index) => (
                 <ActionCard key={`${action}-${index}`} action={action} index={index} />
               ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "0.85rem",
+                borderRadius: "14px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+              }}
+            >
+              <SectionTitle>No fusion needed at this pole</SectionTitle>
+              <div style={{ marginTop: "0.3rem", fontSize: "0.76rem", color: "#166534" }}>
+                This pole does not have pending fusion tasks right now.
+              </div>
             </div>
           )}
 
@@ -467,69 +456,43 @@ function PoleDetailContent({ data }) {
           )}
 
           <div style={{ marginTop: "1rem" }}>
-            <SectionTitle>Sheaths and fiber calculation</SectionTitle>
-            <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-              <FilterPill label="Tasks" active={fiberFilter === "tasks"} onClick={() => setFiberFilter("tasks")} tone="danger" />
-              <FilterPill label="Active" active={fiberFilter === "active"} onClick={() => setFiberFilter("active")} tone="success" />
-              <FilterPill label="Dark" active={fiberFilter === "dark"} onClick={() => setFiberFilter("dark")} tone="neutral" />
-              <FilterPill label="All" active={fiberFilter === "all"} onClick={() => setFiberFilter("all")} tone="neutral" />
-            </div>
-            {poleDetail.sheaths?.length > 0 ? (
-              poleDetail.sheaths.map((sheath) => {
-                const visibleFibers = sheath.fibers.filter((fiber) => matchesFiberFilter(fiber, fiberFilter));
-
-                return (
-                  <div
-                    key={sheath.id}
-                    style={{
-                      marginTop: "0.75rem",
-                      border: "1px solid #dbe3ee",
-                      borderRadius: "14px",
-                      padding: "0.9rem",
-                      background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-                      boxShadow: "0 12px 24px rgba(15, 23, 42, 0.05)",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#0f172a" }}>{getSheathDisplayName(sheath)}</div>
-                        <div style={{ marginTop: "0.24rem", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.4 }}>
-                          {sheath.role.toLowerCase()} end
-                          {sheath.connectedPoleNumbers?.length > 0 ? ` -> ${sheath.connectedPoleNumbers.join(", ")}` : ""}
-                        </div>
+            <SectionTitle>Fibers needing fusion</SectionTitle>
+            {sheathsNeedingFusion.length > 0 ? (
+              sheathsNeedingFusion.map((sheath) => (
+                <div
+                  key={sheath.id}
+                  style={{
+                    marginTop: "0.75rem",
+                    border: "1px solid #fecaca",
+                    borderRadius: "14px",
+                    padding: "0.9rem",
+                    background: "linear-gradient(180deg, #ffffff 0%, #fff7f7 100%)",
+                    boxShadow: "0 12px 24px rgba(127, 29, 29, 0.05)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#0f172a" }}>{getSheathDisplayName(sheath)}</div>
+                      <div style={{ marginTop: "0.24rem", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.4 }}>
+                        {sheath.role.toLowerCase()} end
+                        {sheath.connectedPoleNumbers?.length > 0 ? ` -> ${sheath.connectedPoleNumbers.join(", ")}` : ""}
                       </div>
-                      <Badge tone="neutral">{visibleFibers.length} visible</Badge>
                     </div>
-
-                    <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                      <Badge tone="success">Active {sheath.summary.activeCount}</Badge>
-                      <Badge tone="neutral">Dark {sheath.summary.darkCount}</Badge>
-                      <Badge tone="danger">Issues {sheath.summary.inconsistentCount}</Badge>
-                    </div>
-
-                    {visibleFibers.length > 0 ? (
-                      visibleFibers.map((fiber) => <FiberRow key={fiber.id} fiber={fiber} />)
-                    ) : (
-                      <div
-                        style={{
-                          marginTop: "0.7rem",
-                          padding: "0.7rem",
-                          borderRadius: "10px",
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
-                          fontSize: "0.8rem",
-                          color: "#64748b",
-                        }}
-                      >
-                        No fibers match the current filter for this sheath.
-                      </div>
-                    )}
+                    <Badge tone="danger">{sheath.fusionFibers.length} need fusion</Badge>
                   </div>
-                );
-              })
+
+                  <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                    <Badge tone="danger">Need fusion {sheath.summary.inconsistentCount}</Badge>
+                    <Badge tone="success">Active {sheath.summary.activeCount}</Badge>
+                    <Badge tone="neutral">Dark {sheath.summary.darkCount}</Badge>
+                  </div>
+
+                  {sheath.fusionFibers.map((fiber) => <FiberRow key={fiber.id} fiber={fiber} />)}
+                </div>
+              ))
             ) : (
               <p style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
-                No persisted fiber data at this pole yet.
+                No fusion fibers are pending at this pole.
               </p>
             )}
           </div>
