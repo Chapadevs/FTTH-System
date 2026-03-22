@@ -83,6 +83,23 @@ function parseFiberAction(action) {
   };
 }
 
+function buildNextActionSummary(action) {
+  if (!action) return null;
+  const parsed = parseFiberAction(action);
+
+  if (!parsed.fiberColor || !parsed.bufferColor) {
+    return {
+      headline: action,
+      detail: null,
+    };
+  }
+
+  return {
+    headline: `Fuse ${parsed.fiberColor} fiber in ${parsed.bufferColor} tube.`,
+    detail: parsed.assignment || parsed.route || null,
+  };
+}
+
 function getSheathDisplayName(sheath) {
   if (!sheath?.name) return "Sheath";
   if (isUuidLike(sheath.name) && sheath.connectedPoleNumbers?.length > 0) {
@@ -317,6 +334,7 @@ export function PoleDetailContent({ data, compact = false }) {
     enabled: !!data?.id,
   });
   const poleDetail = poleDetailQuery.data;
+  const nextActionSummary = buildNextActionSummary(poleDetail?.work?.nextAction);
   const sheathsNeedingFusion = poleDetail?.sheaths
     ?.map((sheath) => ({
       ...sheath,
@@ -398,6 +416,29 @@ export function PoleDetailContent({ data, compact = false }) {
                     ? `${poleDetail.summary.needFusionOperationalCount} field fusion task${poleDetail.summary.needFusionOperationalCount === 1 ? "" : "s"} still pending across ${poleDetail.summary.sheathCount} sheaths.`
                     : "No pending fusion work at this pole."}
                 </div>
+                {poleDetail.summary.actionCount > 0 && nextActionSummary && (
+                  <div
+                    style={{
+                      marginTop: "0.55rem",
+                      padding: "0.65rem 0.75rem",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      border: "1px solid #fecaca",
+                    }}
+                  >
+                    <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#991b1b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      Fuse this fiber
+                    </div>
+                    <div style={{ marginTop: "0.22rem", fontSize: "0.82rem", fontWeight: 700, color: "#7f1d1d", lineHeight: 1.4 }}>
+                      {nextActionSummary.headline}
+                    </div>
+                    {nextActionSummary.detail && (
+                      <div style={{ marginTop: "0.18rem", fontSize: "0.74rem", color: "#475569", lineHeight: 1.4 }}>
+                        {nextActionSummary.detail}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {poleDetail.summary.inconsistencyCount > 0 && (
                   <div style={{ marginTop: "0.35rem", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.4 }}>
                     {poleDetail.summary.inconsistencyCount} data issue{poleDetail.summary.inconsistencyCount === 1 ? "" : "s"} flagged for audit.
