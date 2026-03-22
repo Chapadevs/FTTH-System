@@ -38,6 +38,7 @@ export const mapRouter = router({
                     },
                     fiberRecords: {
                       include: {
+                        endpointObservations: true,
                         assignments: {
                           select: {
                             id: true,

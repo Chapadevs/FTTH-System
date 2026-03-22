@@ -51,6 +51,7 @@ model Pole {
   segmentsTo       FiberSegment[]     @relation("ToPole")
   equipment        Equipment[]
   sheathEndpoints  SheathEndpoint[]
+  fiberObservations FiberEndpointObservation[]
 }
 
 model FiberSegment {
@@ -120,6 +121,7 @@ model FiberRecord {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   assignments     FiberAssignment[]
+  endpointObservations FiberEndpointObservation[]
 
   @@unique([sheathId, bufferIndex, fiberIndex])
   @@index([sheathId])
@@ -139,6 +141,28 @@ model FiberAssignment {
 
   @@index([fiberRecordId])
   @@index([equipmentId])
+}
+
+model FiberEndpointObservation {
+  id             String                   @id @default(cuid())
+  fiberRecordId  String
+  fiberRecord    FiberRecord              @relation(fields: [fiberRecordId], references: [id], onDelete: Cascade)
+  poleId         String
+  pole           Pole                     @relation(fields: [poleId], references: [id])
+  role           EndpointRole
+  connectionType ConnectionType
+  rawConnection  String?
+  wavelength     Float?
+  deviceName     String?
+  portName       String?
+  state          EndpointObservationState
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([fiberRecordId, poleId])
+  @@index([fiberRecordId])
+  @@index([poleId])
+  @@index([poleId, state])
 }
 
 enum EndpointRole {
@@ -175,6 +199,12 @@ enum AssignmentStatus {
   ACTIVE
   DARK
   INCONSISTENT
+}
+
+enum EndpointObservationState {
+  ACTIVE
+  DARK
+  NEEDS_FUSION
 }
 
 enum Role {

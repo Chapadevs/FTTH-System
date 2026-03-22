@@ -81,7 +81,9 @@ describe("pole-detail", () => {
     assert.strictEqual(detail.summary.sheathCount, 1);
     assert.strictEqual(detail.summary.activeCount, 1);
     assert.strictEqual(detail.summary.darkCount, 0);
+    assert.strictEqual(detail.summary.needFusionOperationalCount, 1);
     assert.strictEqual(detail.summary.inconsistentCount, 1);
+    assert.strictEqual(detail.summary.inconsistencyCount, 1);
     assert.strictEqual(detail.summary.equipmentCount, 1);
     assert.strictEqual(detail.connectedPoles.length, 1);
     assert.strictEqual(detail.sheaths[0].connectedPoleNumbers[0], "MWC23T137");
@@ -89,5 +91,94 @@ describe("pole-detail", () => {
     assert.strictEqual(detail.work.status, "NEEDS_WORK");
     assert.strictEqual(detail.work.taskCount, 1);
     assert.match(detail.work.nextAction, /Fuse GREEN fiber in BLUE tube/i);
+  });
+
+  it("counts only tail-assigned fusion work for operational tasks", () => {
+    const makeDarkMismatch = (id, fiberColor) => ({
+      id,
+      bufferColor: "BLUE",
+      fiberColor,
+      bufferIndex: 0,
+      fiberIndex: 0,
+      direction: null,
+      wavelength: null,
+      connectionType: "DARK",
+      assignments: [
+        { id: `${id}-dark`, deviceName: null, portName: null, status: "DARK", equipment: null },
+        { id: `${id}-issue`, deviceName: null, portName: null, status: "INCONSISTENT", equipment: null },
+      ],
+    });
+
+    const detail = buildPoleDetail({
+      id: "pole-13",
+      poleNumber: "MWC23020013",
+      streetName: "Concord Church Road",
+      status: "ACTIVE",
+      lat: 39.45,
+      lng: -82.05,
+      projectId: "project-1",
+      equipment: [],
+      segmentsFrom: [],
+      segmentsTo: [],
+      sheathEndpoints: [
+        {
+          role: "END",
+          sheath: {
+            id: "sheath-a",
+            name: "48CT MWC2302D007 TO MWC23020013",
+            endpoints: [
+              { poleId: "pole-up-a", pole: { id: "pole-up-a", poleNumber: "MWC2302D007" } },
+              { poleId: "pole-13", pole: { id: "pole-13", poleNumber: "MWC23020013" } },
+            ],
+            fiberRecords: [
+              makeDarkMismatch("fiber-a-green", "GREEN"),
+              makeDarkMismatch("fiber-a-brown", "BROWN"),
+            ],
+          },
+        },
+        {
+          role: "END",
+          sheath: {
+            id: "sheath-b",
+            name: "48CT MWC23020013 TO MWC2302D003",
+            endpoints: [
+              { poleId: "pole-up-b", pole: { id: "pole-up-b", poleNumber: "MWC2302D003" } },
+              { poleId: "pole-13", pole: { id: "pole-13", poleNumber: "MWC23020013" } },
+            ],
+            fiberRecords: [
+              makeDarkMismatch("fiber-b-blue", "BLUE"),
+              makeDarkMismatch("fiber-b-orange", "ORANGE"),
+              makeDarkMismatch("fiber-b-green", "GREEN"),
+              makeDarkMismatch("fiber-b-brown", "BROWN"),
+              {
+                id: "fiber-b-slate",
+                bufferColor: "BLUE",
+                fiberColor: "SLATE",
+                bufferIndex: 0,
+                fiberIndex: 4,
+                direction: null,
+                wavelength: null,
+                connectionType: "FUSION",
+                assignments: [
+                  {
+                    id: "assignment-local",
+                    deviceName: "MWC23020013",
+                    portName: "PORT1",
+                    status: "INCONSISTENT",
+                    equipment: null,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    assert.strictEqual(detail.summary.needFusionOperationalCount, 1);
+    assert.strictEqual(detail.summary.actionCount, 1);
+    assert.strictEqual(detail.summary.inconsistencyCount, 7);
+    assert.strictEqual(detail.work.taskCount, 1);
+    assert.match(detail.work.nextAction, /SLATE fiber in BLUE tube/i);
   });
 });

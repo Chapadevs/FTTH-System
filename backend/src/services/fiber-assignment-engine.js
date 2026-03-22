@@ -63,10 +63,13 @@ function rowToFiberRecord(row, getColumn) {
 
   const bufferIndex = COLOR_CODE_MAP[bufferCode];
   const fiberIndex = COLOR_CODE_MAP[fiberCode];
+  const rawConnection = connectionRaw == null ? null : String(connectionRaw).trim();
   const connectionType = parseConnection(connectionRaw);
-  const wavelength = wavelengthRaw != null && wavelengthRaw !== "" && wavelengthRaw !== "N/A"
-    ? parseFloat(String(wavelengthRaw)) || null
-    : null;
+  const normalizedWavelength = wavelengthRaw == null ? "" : String(wavelengthRaw).trim();
+  const parsedWavelength = normalizedWavelength !== "" && normalizedWavelength.toUpperCase() !== "N/A"
+    ? parseFloat(normalizedWavelength)
+    : NaN;
+  const wavelength = Number.isFinite(parsedWavelength) && parsedWavelength > 0 ? parsedWavelength : null;
 
   return {
     sheathName: sheathRaw ? String(sheathRaw).trim() : null,
@@ -76,6 +79,7 @@ function rowToFiberRecord(row, getColumn) {
     fiberColor: FIBER_COLORS[fiberIndex],
     bufferIndex,
     fiberIndex,
+    rawConnection,
     connectionType,
     wavelength,
     deviceName: deviceRaw ? String(deviceRaw).trim() : null,

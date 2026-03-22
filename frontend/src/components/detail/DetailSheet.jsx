@@ -320,7 +320,7 @@ export function PoleDetailContent({ data, compact = false }) {
   const sheathsNeedingFusion = poleDetail?.sheaths
     ?.map((sheath) => ({
       ...sheath,
-      fusionFibers: sheath.fibers.filter((fiber) => fiber.status === "INCONSISTENT"),
+      fusionFibers: sheath.fibers.filter((fiber) => fiber.operationalNeedFusion),
     }))
     .filter((sheath) => sheath.fusionFibers.length > 0) ?? [];
 
@@ -369,7 +369,8 @@ export function PoleDetailContent({ data, compact = false }) {
           >
             <SummaryCard label="Active fibers" value={poleDetail.summary.activeCount} tone="success" />
             <SummaryCard label="Dark fibers" value={poleDetail.summary.darkCount} tone="neutral" />
-            <SummaryCard label="Need fusion" value={poleDetail.summary.inconsistentCount} tone="danger" />
+            <SummaryCard label="Need fusion (field)" value={poleDetail.summary.needFusionOperationalCount} tone="danger" />
+            <SummaryCard label="Data issues" value={poleDetail.summary.inconsistencyCount} tone="neutral" />
             <SummaryCard label="Sheaths" value={poleDetail.summary.sheathCount} tone="neutral" />
           </div>
 
@@ -394,9 +395,14 @@ export function PoleDetailContent({ data, compact = false }) {
                   }}
                 >
                   {poleDetail.summary.actionCount > 0
-                    ? `${poleDetail.summary.inconsistentCount} fibers still need fusion across ${poleDetail.summary.sheathCount} sheaths.`
+                    ? `${poleDetail.summary.needFusionOperationalCount} field fusion task${poleDetail.summary.needFusionOperationalCount === 1 ? "" : "s"} still pending across ${poleDetail.summary.sheathCount} sheaths.`
                     : "No pending fusion work at this pole."}
                 </div>
+                {poleDetail.summary.inconsistencyCount > 0 && (
+                  <div style={{ marginTop: "0.35rem", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.4 }}>
+                    {poleDetail.summary.inconsistencyCount} data issue{poleDetail.summary.inconsistencyCount === 1 ? "" : "s"} flagged for audit.
+                  </div>
+                )}
               </div>
 
               {poleDetail.connectedPoles?.length > 0 && (
@@ -454,7 +460,7 @@ export function PoleDetailContent({ data, compact = false }) {
             >
               <SectionTitle>Fusion tasks at this pole</SectionTitle>
               <div style={{ marginTop: "0.3rem", fontSize: "0.76rem", color: "#991b1b" }}>
-                Only the fibers below still need fusion work in the field.
+                Only tail-driven field fusion tasks are listed below.
               </div>
               {poleDetail.sheaths.flatMap((sheath) => sheath.actions).map((action, index) => (
                 <ActionCard key={`${action}-${index}`} action={action} index={index} />
@@ -522,11 +528,12 @@ export function PoleDetailContent({ data, compact = false }) {
                         {sheath.connectedPoleNumbers?.length > 0 ? ` -> ${sheath.connectedPoleNumbers.join(", ")}` : ""}
                       </div>
                     </div>
-                    <Badge tone="danger">{sheath.fusionFibers.length} need fusion</Badge>
+                    <Badge tone="danger">{sheath.fusionFibers.length} field task{sheath.fusionFibers.length === 1 ? "" : "s"}</Badge>
                   </div>
 
                   <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                    <Badge tone="danger">Need fusion {sheath.summary.inconsistentCount}</Badge>
+                    <Badge tone="danger">Need fusion {sheath.summary.needFusionOperationalCount}</Badge>
+                    <Badge tone="neutral">Data issues {sheath.summary.inconsistencyCount}</Badge>
                     <Badge tone="success">Active {sheath.summary.activeCount}</Badge>
                     <Badge tone="neutral">Dark {sheath.summary.darkCount}</Badge>
                   </div>

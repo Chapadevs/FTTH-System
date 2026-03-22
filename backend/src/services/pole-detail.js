@@ -1,20 +1,10 @@
-function deriveFiberStatus(fiberRecord) {
-  const assignmentStatuses = new Set((fiberRecord.assignments || []).map((assignment) => assignment.status));
-  if (assignmentStatuses.has("INCONSISTENT")) return "INCONSISTENT";
-  if (assignmentStatuses.has("ACTIVE")) return "ACTIVE";
-  if (assignmentStatuses.has("DARK")) return "DARK";
-
-  const hasWavelength = fiberRecord.wavelength != null && fiberRecord.wavelength !== "";
-  if (fiberRecord.connectionType === "FUSION" && hasWavelength) return "ACTIVE";
-  if (fiberRecord.connectionType === "DARK" && !hasWavelength) return "DARK";
-  return fiberRecord.connectionType === "FUSION" ? "ACTIVE" : "INCONSISTENT";
-}
+import { annotateFibersForPole, summarizeAnnotatedFibers } from "./fusion-planner.js";
 
 function buildAssignmentLabel(assignment) {
   const parts = [];
   if (assignment.deviceName) parts.push(assignment.deviceName);
   if (assignment.portName) parts.push(assignment.portName);
-  return parts.join(" - ") || "No assignment";
+  return parts.join(" - ");
 }
 
 function isUuidLike(value) {
@@ -38,7 +28,7 @@ function buildSheathLabel(sheathName, connectedPoleNumbers) {
 }
 
 function buildFiberAction(fiber, sheathName, role, connectedPoleNumbers) {
-  if (fiber.status !== "INCONSISTENT") return null;
+  if (!fiber.operationalNeedFusion) return null;
 
   const direction = fiber.direction ? ` ${String(fiber.direction).toLowerCase()}` : "";
   const connectedLabel = connectedPoleNumbers.length > 0
@@ -46,22 +36,11 @@ function buildFiberAction(fiber, sheathName, role, connectedPoleNumbers) {
     : "";
   const sheathLabel = buildSheathLabel(sheathName, connectedPoleNumbers);
   const assignmentLabel = fiber.assignments.length > 0
-    ? fiber.assignments.map(buildAssignmentLabel).join(", ")
+    ? fiber.assignments.map(buildAssignmentLabel).filter(Boolean).join(", ")
     : "missing assignment";
+  const endpointLabel = role === "END" ? "tail endpoint" : "start endpoint";
 
-  return `Fuse ${fiber.fiberColor} fiber in ${fiber.bufferColor} tube${direction} on ${sheathLabel}${connectedLabel} (${role.toLowerCase()} end) - ${assignmentLabel}`;
-}
-
-function summarizeFibers(fibers) {
-  return fibers.reduce(
-    (acc, fiber) => {
-      if (fiber.status === "ACTIVE") acc.activeCount++;
-      else if (fiber.status === "DARK") acc.darkCount++;
-      else acc.inconsistentCount++;
-      return acc;
-    },
-    { activeCount: 0, darkCount: 0, inconsistentCount: 0 }
-  );
+  return `Fuse ${fiber.fiberColor} fiber in ${fiber.bufferColor} tube${direction} on ${sheathLabel}${connectedLabel} (${endpointLabel}) - ${assignmentLabel || "missing assignment"}`;
 }
 
 export function buildPoleDetail(pole) {
@@ -103,38 +82,12 @@ export function buildPoleDetail(pole) {
       )
     );
 
-    const fibers = (sheath.fiberRecords || [])
-      .map((fiberRecord) => {
-        const status = deriveFiberStatus(fiberRecord);
-        return {
-          id: fiberRecord.id,
-          bufferColor: fiberRecord.bufferColor,
-          fiberColor: fiberRecord.fiberColor,
-          bufferIndex: fiberRecord.bufferIndex,
-          fiberIndex: fiberRecord.fiberIndex,
-          direction: fiberRecord.direction,
-          wavelength: fiberRecord.wavelength,
-          connectionType: fiberRecord.connectionType,
-          status,
-          assignments: (fiberRecord.assignments || []).map((assignment) => ({
-            id: assignment.id,
-            deviceName: assignment.deviceName,
-            portName: assignment.portName,
-            status: assignment.status,
-            equipment: assignment.equipment
-              ? {
-                  id: assignment.equipment.id,
-                  tag: assignment.equipment.tag,
-                  name: assignment.equipment.name,
-                  equipType: assignment.equipment.equipType,
-                }
-              : null,
-          })),
-        };
-      })
-      .sort((a, b) => a.bufferIndex - b.bufferIndex || a.fiberIndex - b.fiberIndex);
-
-    const summary = summarizeFibers(fibers);
+    const fibers = annotateFibersForPole({
+      pole,
+      endpoint,
+      fiberRecords: sheath.fiberRecords,
+    });
+    const summary = summarizeAnnotatedFibers(fibers);
     const actions = fibers
       .map((fiber) => buildFiberAction(fiber, sheath.name, endpoint.role, connectedPoleNumbers))
       .filter(Boolean);
@@ -156,7 +109,8 @@ export function buildPoleDetail(pole) {
       acc.sheathCount++;
       acc.activeCount += sheath.summary.activeCount;
       acc.darkCount += sheath.summary.darkCount;
-      acc.inconsistentCount += sheath.summary.inconsistentCount;
+      acc.needFusionOperationalCount += sheath.summary.needFusionOperationalCount;
+      acc.inconsistencyCount += sheath.summary.inconsistencyCount;
       acc.actionCount += sheath.actions.length;
       return acc;
     },
@@ -164,7 +118,8 @@ export function buildPoleDetail(pole) {
       sheathCount: 0,
       activeCount: 0,
       darkCount: 0,
-      inconsistentCount: 0,
+      needFusionOperationalCount: 0,
+      inconsistencyCount: 0,
       actionCount: 0,
     }
   );
@@ -189,6 +144,7 @@ export function buildPoleDetail(pole) {
     projectId: pole.projectId,
     summary: {
       ...overallSummary,
+      inconsistentCount: overallSummary.needFusionOperationalCount,
       equipmentCount: (pole.equipment || []).length,
       connectedPoleCount: segmentNeighbors.length,
     },

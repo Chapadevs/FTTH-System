@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import * as XLSX from "xlsx";
-import { buildImportVerification, parseImportFile } from "./project-import.js";
+import { buildImportVerification, buildSheathCreateInput, parseImportFile } from "./project-import.js";
 
 function workbookBufferFromSheets(sheets) {
   const workbook = XLSX.utils.book_new();
@@ -69,6 +69,66 @@ describe("project-import", () => {
     assert.strictEqual(verification.fiber.present, true);
     assert.ok(
       verification.warnings.some((warning) => warning.includes("No map geometry found"))
+    );
+  });
+
+  it("preserves endpoint-level observations and only creates meaningful assignments", () => {
+    const poleMap = new Map([
+      ["A", { id: "pole-a", poleNumber: "A" }],
+      ["B", { id: "pole-b", poleNumber: "B" }],
+    ]);
+    const sheathInput = buildSheathCreateInput(
+      "project-1",
+      "48CT A TO B",
+      [
+        {
+          sheathName: "48CT A TO B",
+          startEnclosure: "A",
+          endEnclosure: "B",
+          bufferColor: "BLUE",
+          fiberColor: "SLATE",
+          bufferIndex: 0,
+          fiberIndex: 4,
+          direction: null,
+          rawConnection: "<- FUSION ->",
+          connectionType: "FUSION",
+          wavelength: null,
+          deviceName: "B",
+          portName: "PORT1",
+        },
+        {
+          sheathName: "48CT A TO B",
+          startEnclosure: "A",
+          endEnclosure: "B",
+          bufferColor: "BLUE",
+          fiberColor: "GREEN",
+          bufferIndex: 0,
+          fiberIndex: 2,
+          direction: null,
+          rawConnection: "X",
+          connectionType: "DARK",
+          wavelength: null,
+          deviceName: null,
+          portName: null,
+        },
+      ],
+      poleMap
+    );
+
+    const slateFiber = sheathInput.data.fiberRecords.create.find((fiber) => fiber.fiberColor === "SLATE");
+    const greenFiber = sheathInput.data.fiberRecords.create.find((fiber) => fiber.fiberColor === "GREEN");
+    assert.strictEqual(slateFiber.assignments.create.length, 1);
+    assert.strictEqual(slateFiber.assignments.create[0].deviceName, "B");
+    assert.strictEqual(slateFiber.endpointObservations.create.length, 2);
+    assert.strictEqual(
+      slateFiber.endpointObservations.create.find((observation) => observation.poleId === "pole-b").state,
+      "NEEDS_FUSION"
+    );
+    assert.ok(!greenFiber.assignments);
+    assert.strictEqual(greenFiber.endpointObservations.create.length, 2);
+    assert.strictEqual(
+      greenFiber.endpointObservations.create.every((observation) => observation.state === "DARK"),
+      true
     );
   });
 });

@@ -197,6 +197,52 @@ function deriveFiberStatus(record) {
   return "INCONSISTENT";
 }
 
+function hasAssignmentData(record) {
+  return Boolean(record.deviceName || record.portName);
+}
+
+function mergeConnectionType(currentType, nextType) {
+  return currentType === "FUSION" || nextType === "FUSION" ? "FUSION" : "DARK";
+}
+
+function pickPreferredValue(currentValue, nextValue) {
+  return currentValue ?? nextValue ?? null;
+}
+
+function getObservationPriority(state) {
+  if (state === "ACTIVE") return 3;
+  if (state === "NEEDS_FUSION") return 2;
+  return 1;
+}
+
+function mergeObservationState(currentState, nextState) {
+  return getObservationPriority(nextState) > getObservationPriority(currentState)
+    ? nextState
+    : currentState;
+}
+
+function endpointMatchesAssignment(endpoint, record) {
+  if (!hasAssignmentData(record)) return false;
+
+  const deviceKey = normalizeKey(record.deviceName);
+  const poleKey = normalizeKey(endpoint.poleName);
+  if (deviceKey && poleKey && (deviceKey === poleKey || deviceKey.includes(poleKey))) {
+    return true;
+  }
+
+  // Splice reports usually attach port/device metadata to the local enclosure.
+  return endpoint.role === "END";
+}
+
+function deriveObservationState(record, endpoint) {
+  const hasWavelength = record.wavelength != null;
+  if (endpointMatchesAssignment(endpoint, record)) {
+    return record.connectionType === "FUSION" && hasWavelength ? "ACTIVE" : "NEEDS_FUSION";
+  }
+  if (record.connectionType === "FUSION" && hasWavelength) return "ACTIVE";
+  return "DARK";
+}
+
 function groupSheathRecords(records) {
   const recordsBySheath = new Map();
 
@@ -211,7 +257,7 @@ function groupSheathRecords(records) {
   return recordsBySheath;
 }
 
-function buildSheathCreateInput(projectId, sheathName, sheathRecords, poleMap) {
+export function buildSheathCreateInput(projectId, sheathName, sheathRecords, poleMap) {
   const endpointMap = new Map();
   const fiberMap = new Map();
 
@@ -242,41 +288,90 @@ function buildSheathCreateInput(projectId, sheathName, sheathRecords, poleMap) {
         bufferIndex: record.bufferIndex,
         fiberIndex: record.fiberIndex,
         direction: record.direction ?? null,
-        wavelength: record.wavelength,
+        wavelength: record.wavelength ?? null,
         connectionType: record.connectionType,
         assignmentKeySet: new Set(),
         assignments: [],
+        endpointObservationMap: new Map(),
       });
     }
 
     const fiberState = fiberMap.get(fiberKey);
-    const status = deriveFiberStatus(record);
-    const assignmentKey = [
-      record.deviceName || "",
-      record.portName || "",
-      status,
-    ].join("|");
+    fiberState.connectionType = mergeConnectionType(fiberState.connectionType, record.connectionType);
+    fiberState.wavelength = pickPreferredValue(fiberState.wavelength, record.wavelength);
+    fiberState.direction = pickPreferredValue(fiberState.direction, record.direction);
 
-    if (!fiberState.assignmentKeySet.has(assignmentKey)) {
-      fiberState.assignmentKeySet.add(assignmentKey);
-      fiberState.assignments.push({
-        deviceName: record.deviceName,
-        portName: record.portName,
-        status,
-      });
+    for (const endpoint of endpoints) {
+      if (!endpoint.poleName) continue;
+      const pole = poleMap.get(normalizeKey(endpoint.poleName));
+      if (!pole) continue;
+
+      const observationKey = pole.id;
+      const state = deriveObservationState(record, endpoint);
+      const nextObservation = {
+        poleId: pole.id,
+        role: endpoint.role,
+        connectionType: record.connectionType,
+        rawConnection: record.rawConnection ?? null,
+        wavelength: record.wavelength ?? null,
+        deviceName: endpointMatchesAssignment(endpoint, record) ? record.deviceName : null,
+        portName: endpointMatchesAssignment(endpoint, record) ? record.portName : null,
+        state,
+      };
+      const existingObservation = fiberState.endpointObservationMap.get(observationKey);
+
+      if (!existingObservation) {
+        fiberState.endpointObservationMap.set(observationKey, nextObservation);
+      } else {
+        fiberState.endpointObservationMap.set(observationKey, {
+          ...existingObservation,
+          connectionType: mergeConnectionType(existingObservation.connectionType, nextObservation.connectionType),
+          rawConnection: existingObservation.rawConnection || nextObservation.rawConnection,
+          wavelength: pickPreferredValue(existingObservation.wavelength, nextObservation.wavelength),
+          deviceName: existingObservation.deviceName || nextObservation.deviceName,
+          portName: existingObservation.portName || nextObservation.portName,
+          state: mergeObservationState(existingObservation.state, nextObservation.state),
+        });
+      }
     }
   }
 
-  const fiberRecords = Array.from(fiberMap.values()).map((fiberState) => ({
-    bufferColor: fiberState.bufferColor,
-    fiberColor: fiberState.fiberColor,
-    bufferIndex: fiberState.bufferIndex,
-    fiberIndex: fiberState.fiberIndex,
-    direction: fiberState.direction,
-    wavelength: fiberState.wavelength,
-    connectionType: fiberState.connectionType,
-    assignments: fiberState.assignments,
-  }));
+  const fiberRecords = Array.from(fiberMap.values()).map((fiberState) => {
+    const endpointObservations = Array.from(fiberState.endpointObservationMap.values());
+
+    for (const observation of endpointObservations) {
+      if (!observation.deviceName && !observation.portName) continue;
+
+      const status = observation.state === "ACTIVE" ? "ACTIVE" : "INCONSISTENT";
+      const assignmentKey = [
+        observation.poleId,
+        observation.deviceName || "",
+        observation.portName || "",
+        status,
+      ].join("|");
+
+      if (!fiberState.assignmentKeySet.has(assignmentKey)) {
+        fiberState.assignmentKeySet.add(assignmentKey);
+        fiberState.assignments.push({
+          deviceName: observation.deviceName,
+          portName: observation.portName,
+          status,
+        });
+      }
+    }
+
+    return {
+      bufferColor: fiberState.bufferColor,
+      fiberColor: fiberState.fiberColor,
+      bufferIndex: fiberState.bufferIndex,
+      fiberIndex: fiberState.fiberIndex,
+      direction: fiberState.direction,
+      wavelength: fiberState.wavelength,
+      connectionType: fiberState.connectionType,
+      assignments: fiberState.assignments,
+      endpointObservations,
+    };
+  });
 
   return {
     data: {
@@ -307,6 +402,22 @@ function buildSheathCreateInput(projectId, sheathName, sheathRecords, poleMap) {
                       },
                     }
                   : {}),
+                ...(fiberRecord.endpointObservations.length > 0
+                  ? {
+                      endpointObservations: {
+                        create: fiberRecord.endpointObservations.map((observation) => ({
+                          poleId: observation.poleId,
+                          role: observation.role,
+                          connectionType: observation.connectionType,
+                          rawConnection: observation.rawConnection,
+                          wavelength: observation.wavelength,
+                          deviceName: observation.deviceName,
+                          portName: observation.portName,
+                          state: observation.state,
+                        })),
+                      },
+                    }
+                  : {}),
               })),
             },
           }
@@ -316,6 +427,10 @@ function buildSheathCreateInput(projectId, sheathName, sheathRecords, poleMap) {
       endpointCount: endpointMap.size,
       fiberRecordCount: fiberRecords.length,
       assignmentCount: fiberRecords.reduce((sum, fiberRecord) => sum + fiberRecord.assignments.length, 0),
+      endpointObservationCount: fiberRecords.reduce(
+        (sum, fiberRecord) => sum + fiberRecord.endpointObservations.length,
+        0
+      ),
     },
   };
 }
@@ -412,6 +527,7 @@ export async function persistParsedImport(tx, input, createdById, parsed, verifi
   let sheathsCreated = 0;
   let fiberRecordsCreated = 0;
   let assignmentsCreated = 0;
+  let endpointObservationsCreated = 0;
   const virtualPolesCreated = extraFiberPoleNames.length;
 
   if (parsed.fiberData?.records?.length) {
@@ -423,6 +539,7 @@ export async function persistParsedImport(tx, input, createdById, parsed, verifi
       sheathsCreated++;
       fiberRecordsCreated += sheathInput.summary.fiberRecordCount;
       assignmentsCreated += sheathInput.summary.assignmentCount;
+      endpointObservationsCreated += sheathInput.summary.endpointObservationCount;
     }
   }
 
@@ -435,6 +552,7 @@ export async function persistParsedImport(tx, input, createdById, parsed, verifi
       sheathsCreated,
       fiberRecordsCreated,
       assignmentsCreated,
+      endpointObservationsCreated,
     },
     verification,
     warnings: verification.warnings,

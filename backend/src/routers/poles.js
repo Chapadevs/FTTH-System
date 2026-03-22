@@ -68,6 +68,7 @@ export const polesRouter = router({
                   },
                   fiberRecords: {
                     include: {
+                      endpointObservations: true,
                       assignments: {
                         include: {
                           equipment: {
