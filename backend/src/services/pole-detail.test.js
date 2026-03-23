@@ -78,6 +78,7 @@ describe("pole-detail", () => {
       ],
     });
 
+    assert.strictEqual(detail.summary.fiberRecordCount, 2);
     assert.strictEqual(detail.summary.sheathCount, 1);
     assert.strictEqual(detail.summary.activeCount, 1);
     assert.strictEqual(detail.summary.darkCount, 0);
@@ -175,6 +176,7 @@ describe("pole-detail", () => {
       ],
     });
 
+    assert.strictEqual(detail.summary.fiberRecordCount, 7);
     assert.strictEqual(detail.summary.needFusionOperationalCount, 1);
     assert.strictEqual(detail.summary.actionCount, 1);
     assert.strictEqual(detail.summary.inconsistencyCount, 7);

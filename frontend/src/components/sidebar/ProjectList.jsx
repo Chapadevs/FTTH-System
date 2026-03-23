@@ -1,7 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { trpc } from "../../lib/trpc.js";
 
-export function ProjectList({ visibleProjectIds = [], onVisibleChange }) {
+const rowStyle = {
+  padding: "0.12rem 0",
+  borderBottom: "1px solid #f1f5f9",
+  fontSize: "0.62rem",
+  lineHeight: 1.15,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "0.28rem",
+};
+
+const btnBase = {
+  fontSize: "0.55rem",
+  padding: "0.06rem 0.28rem",
+  border: "none",
+  borderRadius: "3px",
+  cursor: "pointer",
+  lineHeight: 1.1,
+};
+
+export function ProjectList({ visibleProjectIds = [], onVisibleChange, onShowProjectOnMap }) {
   const queryClient = useQueryClient();
   const { data: projects } = useQuery(trpc.projects.list.queryOptions());
   const deleteAllProjects = useMutation(
@@ -45,63 +65,74 @@ export function ProjectList({ visibleProjectIds = [], onVisibleChange }) {
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <h3 style={{ margin: 0, fontSize: "0.875rem" }}>Projects</h3>
-        <div style={{ display: "flex", gap: "0.35rem" }}>
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.2rem",
+          marginBottom: "0.22rem",
+        }}
+      >
+        <span
+          style={{
+            margin: 0,
+            fontSize: "0.62rem",
+            fontWeight: 700,
+            letterSpacing: "0.02em",
+            color: "#0f172a",
+            textTransform: "uppercase",
+            flexShrink: 0,
+          }}
+        >
+          Projects
+        </span>
+        <div style={{ display: "flex", gap: "0.18rem", flexShrink: 0 }}>
           {isFiltered && (
-            <button
-              onClick={showAll}
-              style={{
-                fontSize: "0.7rem",
-                padding: "0.2rem 0.4rem",
-                border: "none",
-                background: "#f1f5f9",
-                cursor: "pointer",
-                borderRadius: "4px",
-              }}
-            >
-              Show all
+            <button type="button" onClick={showAll} style={{ ...btnBase, background: "#f1f5f9", color: "#334155" }}>
+              All
             </button>
           )}
           {hasProjects && (
             <button
+              type="button"
               onClick={handleDeleteAll}
               disabled={deleteAllProjects.isPending}
               style={{
-                fontSize: "0.7rem",
-                padding: "0.2rem 0.4rem",
-                border: "none",
+                ...btnBase,
                 background: "#fee2e2",
                 color: "#991b1b",
                 cursor: deleteAllProjects.isPending ? "progress" : "pointer",
-                borderRadius: "4px",
                 opacity: deleteAllProjects.isPending ? 0.7 : 1,
               }}
             >
-              {deleteAllProjects.isPending ? "Removing..." : "Remove all"}
+              {deleteAllProjects.isPending ? "…" : "Clear"}
             </button>
           )}
         </div>
       </div>
       {projects?.length === 0 && (
-        <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>No projects</p>
+        <p style={{ margin: 0, fontSize: "0.58rem", color: "#94a3b8", lineHeight: 1.2 }}>None</p>
       )}
       {projects?.map((p) => {
         const visible = !isFiltered || visibleProjectIds.includes(p.id);
         return (
           <div
             key={p.id}
+            role="button"
+            tabIndex={0}
             onClick={() => toggle(p.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle(p.id);
+              }
+            }}
             style={{
-              padding: "0.5rem 0",
-              borderBottom: "1px solid #e2e8f0",
-              fontSize: "0.875rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              opacity: isChecked(p.id) ? 1 : 0.5,
+              ...rowStyle,
+              opacity: isChecked(p.id) ? 1 : 0.45,
             }}
           >
             <input
@@ -109,8 +140,48 @@ export function ProjectList({ visibleProjectIds = [], onVisibleChange }) {
               checked={isChecked(p.id)}
               onChange={() => toggle(p.id)}
               onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "11px",
+                height: "11px",
+                margin: "0.05rem 0 0 0",
+                flexShrink: 0,
+                cursor: "pointer",
+              }}
             />
-            {p.name}
+            <span
+              title={p.name}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "#334155",
+              }}
+            >
+              {p.name}
+            </span>
+            {onShowProjectOnMap && (
+              <button
+                type="button"
+                aria-label="Show project on map"
+                title="Show on map"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowProjectOnMap(p.id);
+                }}
+                style={{
+                  ...btnBase,
+                  flexShrink: 0,
+                  background: "#e0f2fe",
+                  color: "#0369a1",
+                  fontWeight: 700,
+                  padding: "0.04rem 0.32rem",
+                }}
+              >
+                Map
+              </button>
+            )}
           </div>
         );
       })}

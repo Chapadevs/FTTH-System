@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
+import { hasRenderableCoordinates } from "../lib/geo.js";
 import { buildPoleDetail } from "../services/pole-detail.js";
 
 export const mapRouter = router({
@@ -66,7 +67,9 @@ export const mapRouter = router({
       ]);
 
       return {
-        poles: poles.map((pole) => {
+        poles: poles
+          .filter((pole) => hasRenderableCoordinates(pole.lat, pole.lng))
+          .map((pole) => {
           const detail = buildPoleDetail(pole);
 
           return {
@@ -80,9 +83,13 @@ export const mapRouter = router({
             summary: detail.summary,
             work: detail.work,
           };
-        }),
+          }),
         equipment,
-        segments,
+        segments: segments.filter(
+          (seg) =>
+            hasRenderableCoordinates(seg.fromPole.lat, seg.fromPole.lng) &&
+            hasRenderableCoordinates(seg.toPole.lat, seg.toPole.lng)
+        ),
       };
     }),
 });

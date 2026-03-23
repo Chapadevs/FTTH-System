@@ -4,11 +4,20 @@ import {
   buildDirectServedPoleLookup,
   decorateMapPole,
   isDistributionPole,
+  isSplitterPole,
 } from "./distribution-pole.js";
 
 test("identifies distribution poles by pole number pattern", () => {
   assert.equal(isDistributionPole("MWC2302D003"), true);
   assert.equal(isDistributionPole("MWC23020013"), false);
+});
+
+test("identifies splitter poles by pole number pattern", () => {
+  assert.equal(isSplitterPole("MWC2302S006"), true);
+  assert.equal(isSplitterPole("2302E_SE_004"), true);
+  assert.equal(isSplitterPole("MWC23020013"), false);
+  assert.equal(isSplitterPole("MWC2302D003"), false);
+  assert.equal(isSplitterPole("MWC2302S"), false);
 });
 
 test("builds direct served poles excluding distribution neighbors", () => {

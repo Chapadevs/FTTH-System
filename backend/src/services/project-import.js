@@ -1,3 +1,4 @@
+import { hasRenderableCoordinates } from "../lib/geo.js";
 import {
   extractFiberRowsFromWorkbook,
   getImportableSheetNamesFromWorkbook,
@@ -496,33 +497,54 @@ export async function persistParsedImport(tx, input, createdById, parsed, verifi
     },
   });
 
+  const poleRows = Array.from(uniquePoles.values()).map((pole) => ({
+    ...pole,
+    projectId: project.id,
+  }));
+  if (poleRows.length > 0) {
+    await tx.pole.createMany({ data: poleRows });
+  }
+
+  const createdPoles = await tx.pole.findMany({
+    where: { projectId: project.id },
+    select: { id: true, poleNumber: true },
+  });
+
   const poleMap = new Map();
-  for (const pole of uniquePoles.values()) {
-    const createdPole = await tx.pole.create({
-      data: {
-        ...pole,
-        projectId: project.id,
-      },
-    });
+  for (const createdPole of createdPoles) {
     poleMap.set(normalizeKey(createdPole.poleNumber), createdPole);
   }
 
-  let segmentsCreated = 0;
+  const segmentRows = [];
   for (const segment of parsed.mapData?.rawSegments || []) {
-    const fromPole = poleMap.get(normalizeKey(segment.from));
-    const toPole = poleMap.get(normalizeKey(segment.to));
+    const fromKey = normalizeKey(segment.from);
+    const toKey = normalizeKey(segment.to);
+    const fromPole = poleMap.get(fromKey);
+    const toPole = poleMap.get(toKey);
     if (!fromPole || !toPole) continue;
 
-    await tx.fiberSegment.create({
-      data: {
-        lengthFt: segment.lengthFt,
-        projectId: project.id,
-        fromPoleId: fromPole.id,
-        toPoleId: toPole.id,
-      },
+    const fromCoords = uniquePoles.get(fromKey);
+    const toCoords = uniquePoles.get(toKey);
+    if (
+      !fromCoords ||
+      !toCoords ||
+      !hasRenderableCoordinates(fromCoords.lat, fromCoords.lng) ||
+      !hasRenderableCoordinates(toCoords.lat, toCoords.lng)
+    ) {
+      continue;
+    }
+
+    segmentRows.push({
+      lengthFt: segment.lengthFt,
+      projectId: project.id,
+      fromPoleId: fromPole.id,
+      toPoleId: toPole.id,
     });
-    segmentsCreated++;
   }
+  if (segmentRows.length > 0) {
+    await tx.fiberSegment.createMany({ data: segmentRows });
+  }
+  const segmentsCreated = segmentRows.length;
 
   let sheathsCreated = 0;
   let fiberRecordsCreated = 0;

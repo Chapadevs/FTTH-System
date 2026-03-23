@@ -13,6 +13,7 @@ const FIBER_COLOR_STYLES = {
   YELLOW: { dot: "#eab308", background: "#fef9c3", border: "#fde047", text: "#854d0e" },
   VIOLET: { dot: "#7c3aed", background: "#ede9fe", border: "#c4b5fd", text: "#5b21b6" },
   PINK: { dot: "#db2777", background: "#fce7f3", border: "#f9a8d4", text: "#9d174d" },
+  ROSE: { dot: "#db2777", background: "#fce7f3", border: "#f9a8d4", text: "#9d174d" },
   AQUA: { dot: "#0891b2", background: "#cffafe", border: "#67e8f9", text: "#155e75" },
 };
 
@@ -33,8 +34,15 @@ function normalizeLabel(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function getFiberColorDisplayName(color) {
+  const key = normalizeLabel(color);
+  if (key === "PINK" || key === "ROSE") return "ROSE";
+  return key;
+}
+
 function getFiberColorStyle(color) {
-  return FIBER_COLOR_STYLES[normalizeLabel(color)] || SUMMARY_TONES.neutral;
+  const key = normalizeLabel(color);
+  return FIBER_COLOR_STYLES[key] || SUMMARY_TONES.neutral;
 }
 
 function getStatusStyle(status) {
@@ -91,12 +99,16 @@ function buildNextActionSummary(action) {
     return {
       headline: action,
       detail: null,
+      fiberColor: null,
+      bufferColor: null,
     };
   }
 
   return {
     headline: `Fuse ${parsed.fiberColor} fiber in ${parsed.bufferColor} tube.`,
     detail: parsed.assignment || parsed.route || null,
+    fiberColor: parsed.fiberColor,
+    bufferColor: parsed.bufferColor,
   };
 }
 
@@ -178,31 +190,44 @@ function ColorChip({ label, color }) {
         }}
       />
       <span style={{ color: "#64748b", fontWeight: 600 }}>{label}</span>
-      <span>{normalizeLabel(color)}</span>
+      <span>{getFiberColorDisplayName(color)}</span>
     </div>
   );
 }
 
-function Badge({ children, tone = "neutral" }) {
+function Badge({ children, tone = "neutral", onClick }) {
   const style = SUMMARY_TONES[tone] || SUMMARY_TONES.neutral;
 
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "0.18rem 0.5rem",
-        borderRadius: "999px",
-        border: `1px solid ${style.border}`,
-        background: style.background,
-        color: style.text,
-        fontSize: "0.72rem",
-        fontWeight: 700,
-      }}
-    >
-      {children}
-    </span>
-  );
+  const sharedStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.18rem 0.5rem",
+    borderRadius: "999px",
+    border: `1px solid ${style.border}`,
+    background: style.background,
+    color: style.text,
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    ...(onClick
+      ? {
+          cursor: "pointer",
+          font: "inherit",
+          fontFamily: "inherit",
+          margin: 0,
+          lineHeight: 1.2,
+        }
+      : {}),
+  };
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} style={sharedStyle}>
+        {children}
+      </button>
+    );
+  }
+
+  return <span style={sharedStyle}>{children}</span>;
 }
 
 
@@ -328,7 +353,7 @@ function ActionCard({ action, index }) {
   );
 }
 
-function DistributionPoleCompactContent({ data }) {
+function DistributionPoleCompactContent({ data, onNavigateToPole }) {
   const directServedPoles = data?.distribution?.directServedPoles || [];
 
   return (
@@ -352,10 +377,20 @@ function DistributionPoleCompactContent({ data }) {
         </div>
       </div>
 
+      <DistributionPoleSupplement data={data} directServedPoles={directServedPoles} onNavigateToPole={onNavigateToPole} />
+    </>
+  );
+}
+
+function DistributionPoleSupplement({ data, directServedPoles, onNavigateToPole, compact = false }) {
+  const spacing = compact ? "0.8rem" : "1rem";
+
+  return (
+    <>
       <div
         style={{
-          marginTop: "1rem",
-          padding: "0.85rem",
+          marginTop: spacing,
+          padding: compact ? "0.75rem" : "0.85rem",
           borderRadius: "14px",
           background: "#fff7ed",
           border: "1px solid #fdba74",
@@ -367,18 +402,33 @@ function DistributionPoleCompactContent({ data }) {
         </div>
       </div>
 
-      <div style={{ marginTop: "1rem" }}>
+      <div style={{ marginTop: spacing }}>
         <SectionTitle>Direct served poles</SectionTitle>
         {directServedPoles.length > 0 ? (
           <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.45rem" }}>
             {directServedPoles.map((pole) => (
               <div
                 key={pole.id}
+                role={onNavigateToPole ? "button" : undefined}
+                tabIndex={onNavigateToPole ? 0 : undefined}
+                onClick={onNavigateToPole ? () => onNavigateToPole(pole) : undefined}
+                onKeyDown={
+                  onNavigateToPole
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onNavigateToPole(pole);
+                        }
+                      }
+                    : undefined
+                }
                 style={{
-                  padding: "0.7rem 0.75rem",
+                  padding: compact ? "0.6rem 0.65rem" : "0.7rem 0.75rem",
                   border: "1px solid #e2e8f0",
                   borderRadius: "10px",
                   background: "#ffffff",
+                  cursor: onNavigateToPole ? "pointer" : undefined,
+                  textAlign: "left",
                 }}
               >
                 <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>{pole.poleNumber}</div>
@@ -396,9 +446,182 @@ function DistributionPoleCompactContent({ data }) {
   );
 }
 
-export function PoleDetailContent({ data, compact = false }) {
-  if (compact && data?.distribution?.isDistribution) {
-    return <DistributionPoleCompactContent data={data} />;
+function CompactMetricCard({ label, value, tone = "neutral" }) {
+  const style = SUMMARY_TONES[tone] || SUMMARY_TONES.neutral;
+
+  return (
+    <div
+      style={{
+        padding: "0.55rem 0.65rem",
+        borderRadius: "10px",
+        border: `1px solid ${style.border}`,
+        background: style.background,
+      }}
+    >
+      <div style={{ fontSize: "0.67rem", color: "#64748b", marginBottom: "0.18rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+        {label}
+      </div>
+      <div style={{ fontSize: "1rem", fontWeight: 800, color: style.text }}>{value}</div>
+    </div>
+  );
+}
+
+function MapPopoverSupplement({ data, poleDetail, compactActionSummaries, onNavigateToPole }) {
+  const directServedPoles = data?.distribution?.directServedPoles || [];
+  const summary = poleDetail?.summary;
+
+  return (
+    <>
+      <details
+        style={{
+          marginTop: "0.7rem",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          background: "#ffffff",
+          overflow: "hidden",
+        }}
+      >
+        <summary
+          style={{
+            cursor: "pointer",
+            listStyle: "none",
+            padding: "0.65rem 0.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.6rem",
+            fontSize: "0.76rem",
+            fontWeight: 700,
+            color: "#0f172a",
+          }}
+        >
+          <span>More details</span>
+          <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
+            {summary?.needFusionOperationalCount ?? 0} fusion, {summary?.inconsistencyCount ?? 0} issues
+          </span>
+        </summary>
+        <div style={{ padding: "0 0.75rem 0.75rem" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.1rem" }}>
+            <Badge tone="neutral">Status {poleDetail?.status || data?.status || "—"}</Badge>
+            <Badge tone="neutral">Sheaths {summary?.sheathCount ?? 0}</Badge>
+            <Badge tone="neutral">Fibers in data {summary?.fiberRecordCount ?? 0}</Badge>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "0.5rem",
+              marginTop: "0.7rem",
+            }}
+          >
+            <SummaryCard label="Need fusion (field)" value={summary?.needFusionOperationalCount ?? 0} tone="danger" />
+            <SummaryCard label="Data issues" value={summary?.inconsistencyCount ?? 0} tone="neutral" />
+          </div>
+
+          <div
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.65rem 0.75rem",
+              borderRadius: "12px",
+              background: (summary?.actionCount ?? 0) > 0 ? "#fef2f2" : "#f0fdf4",
+              border: (summary?.actionCount ?? 0) > 0 ? "1px solid #fecaca" : "1px solid #bbf7d0",
+            }}
+          >
+            <SectionTitle>{(summary?.actionCount ?? 0) > 0 ? "Fusion" : "Pole ready"}</SectionTitle>
+            <div
+              style={{
+                marginTop: "0.28rem",
+                fontSize: "0.74rem",
+                lineHeight: 1.35,
+                color: (summary?.actionCount ?? 0) > 0 ? "#991b1b" : "#166534",
+              }}
+            >
+              {(summary?.actionCount ?? 0) > 0
+                ? `${summary?.needFusionOperationalCount ?? 0} pending`
+                : "No pending fusion work."}
+            </div>
+            {(summary?.actionCount ?? 0) > 0 && compactActionSummaries.length > 0 && (
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                }}
+              >
+                {compactActionSummaries.map((summaryItem) => (
+                  <div
+                    key={summaryItem.key}
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.45rem 0.5rem",
+                      borderRadius: "8px",
+                      background: "#ffffff",
+                      border: "1px solid #fecaca",
+                    }}
+                  >
+                    {summaryItem.fiberColor && summaryItem.bufferColor ? (
+                      <>
+                        <ColorChip label="Fiber" color={summaryItem.fiberColor} />
+                        <ColorChip label="Tube" color={summaryItem.bufferColor} />
+                      </>
+                    ) : (
+                      <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#7f1d1d", lineHeight: 1.35 }}>
+                        {summaryItem.headline}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {poleDetail?.connectedPoles?.length > 0 && (
+            <div style={{ marginTop: "0.8rem" }}>
+              <SectionTitle>Connected poles</SectionTitle>
+              <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                {poleDetail.connectedPoles.slice(0, 4).map((segment) => (
+                  <Badge
+                    key={segment.id}
+                    tone="neutral"
+                    onClick={
+                      onNavigateToPole && segment.pole
+                        ? () => onNavigateToPole(segment.pole)
+                        : undefined
+                    }
+                  >
+                    {segment.pole?.poleNumber}
+                  </Badge>
+                ))}
+                {poleDetail.connectedPoles.length > 4 && (
+                  <Badge tone="neutral">+{poleDetail.connectedPoles.length - 4} more</Badge>
+                )}
+              </div>
+            </div>
+          )}
+          {data?.distribution?.isDistribution && (
+            <DistributionPoleSupplement
+              data={data}
+              directServedPoles={directServedPoles}
+              onNavigateToPole={onNavigateToPole}
+              compact
+            />
+          )}
+        </div>
+      </details>
+    </>
+  );
+}
+
+export function PoleDetailContent({ data, compact = false, onNavigateToPole, variant = "default" }) {
+  const isMapPopover = variant === "mapPopover";
+
+  if (compact && data?.distribution?.isDistribution && !isMapPopover) {
+    return <DistributionPoleCompactContent data={data} onNavigateToPole={onNavigateToPole} />;
   }
 
   const poleDetailQuery = useQuery({
@@ -406,48 +629,93 @@ export function PoleDetailContent({ data, compact = false }) {
     enabled: !!data?.id,
   });
   const poleDetail = poleDetailQuery.data;
-  const nextActionSummary = buildNextActionSummary(poleDetail?.work?.nextAction);
   const sheathsNeedingFusion = poleDetail?.sheaths
     ?.map((sheath) => ({
       ...sheath,
       fusionFibers: sheath.fibers.filter((fiber) => fiber.operationalNeedFusion),
     }))
     .filter((sheath) => sheath.fusionFibers.length > 0) ?? [];
+  const compactActionSummaries = poleDetail?.sheaths
+    ?.flatMap((sheath) =>
+      sheath.actions
+        .map((action, index) => ({
+          ...buildNextActionSummary(action),
+          key: `${sheath.id}-${index}`,
+        }))
+        .filter((summary) => summary.headline)
+    ) ?? [];
+  const displayData = poleDetail || data;
+  const isDistribution = displayData?.distribution?.isDistribution || data?.distribution?.isDistribution;
 
   return (
     <>
-      <div
-        style={{
-          padding: compact ? "0.75rem" : "0.85rem",
-          borderRadius: "14px",
-          background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
-          border: "1px solid #e2e8f0",
-        }}
-      >
-        <InfoLine label="Pole" value={poleDetail?.poleNumber || data?.poleNumber} />
-        <InfoLine label="Street" value={poleDetail?.streetName || data?.streetName || "—"} />
-        <InfoLine label="Status" value={poleDetail?.status || data?.status} />
-        <div style={{ marginTop: "0.55rem" }}>
-          <span style={{ display: "block", fontSize: "0.77rem", color: "#64748b", fontWeight: 600 }}>Coordinates</span>
-          <span style={{ display: "block", marginTop: "0.18rem", fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.4 }}>
-            {poleDetail?.lat ?? data?.lat}, {poleDetail?.lng ?? data?.lng}
-          </span>
+      {isMapPopover ? (
+        <div
+          style={{
+            padding: "0.75rem",
+            borderRadius: "12px",
+            background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            {isDistribution ? "Distribution pole" : "Pole"}
+          </div>
+          <div style={{ marginTop: "0.18rem", fontSize: "0.82rem", color: "#0f172a", fontWeight: 700, lineHeight: 1.35 }}>
+            {displayData?.streetName || "Street unavailable"}
+          </div>
+          <div style={{ marginTop: "0.45rem" }}>
+            <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>Coordinates</div>
+            <div style={{ marginTop: "0.15rem", fontSize: "0.78rem", color: "#334155", lineHeight: 1.35 }}>
+              {displayData?.lat ?? data?.lat}, {displayData?.lng ?? data?.lng}
+            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "0.5rem",
+              marginTop: "0.7rem",
+            }}
+          >
+            <CompactMetricCard label="Active fibers" value={poleDetail?.summary?.activeCount ?? "—"} tone="success" />
+            <CompactMetricCard label="Dark fibers" value={poleDetail?.summary?.darkCount ?? "—"} tone="neutral" />
+          </div>
         </div>
-      </div>
+      ) : (
+        <div
+          style={{
+            padding: compact ? "0.75rem" : "0.85rem",
+            borderRadius: "14px",
+            background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <InfoLine label="Pole" value={poleDetail?.poleNumber || data?.poleNumber} />
+          <InfoLine label="Street" value={poleDetail?.streetName || data?.streetName || "—"} />
+          <InfoLine label="Status" value={poleDetail?.status || data?.status} />
+          <div style={{ marginTop: "0.55rem" }}>
+            <span style={{ display: "block", fontSize: "0.77rem", color: "#64748b", fontWeight: 600 }}>Coordinates</span>
+            <span style={{ display: "block", marginTop: "0.18rem", fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.4 }}>
+              {poleDetail?.lat ?? data?.lat}, {poleDetail?.lng ?? data?.lng}
+            </span>
+          </div>
+        </div>
+      )}
 
       {poleDetailQuery.isLoading && (
-        <p style={{ marginTop: "1rem", fontSize: "0.82rem", color: "#64748b" }}>
+        <p style={{ marginTop: isMapPopover ? "0.65rem" : "1rem", fontSize: "0.82rem", color: "#64748b" }}>
           Loading pole detail...
         </p>
       )}
 
       {poleDetailQuery.isError && (
-        <p style={{ marginTop: "1rem", fontSize: "0.82rem", color: "#b91c1c" }}>
+        <p style={{ marginTop: isMapPopover ? "0.65rem" : "1rem", fontSize: "0.82rem", color: "#b91c1c" }}>
           Could not load fiber detail for this pole.
         </p>
       )}
 
-      {poleDetail && (
+      {poleDetail && !isMapPopover && (
         <>
           <div
             style={{
@@ -462,6 +730,11 @@ export function PoleDetailContent({ data, compact = false }) {
             <SummaryCard label="Need fusion (field)" value={poleDetail.summary.needFusionOperationalCount} tone="danger" />
             <SummaryCard label="Data issues" value={poleDetail.summary.inconsistencyCount} tone="neutral" />
             <SummaryCard label="Sheaths" value={poleDetail.summary.sheathCount} tone="neutral" />
+            <SummaryCard
+              label="Fibers in data"
+              value={poleDetail.summary.fiberRecordCount ?? 0}
+              tone="neutral"
+            />
           </div>
 
           {compact ? (
@@ -469,46 +742,60 @@ export function PoleDetailContent({ data, compact = false }) {
               <div
                 style={{
                   marginTop: "1rem",
-                  padding: "0.85rem",
-                  borderRadius: "14px",
+                  padding: "0.65rem 0.75rem",
+                  borderRadius: "12px",
                   background: poleDetail.summary.actionCount > 0 ? "#fef2f2" : "#f0fdf4",
                   border: poleDetail.summary.actionCount > 0 ? "1px solid #fecaca" : "1px solid #bbf7d0",
                 }}
               >
-                <SectionTitle>{poleDetail.summary.actionCount > 0 ? "Field action needed" : "Pole ready"}</SectionTitle>
+                <SectionTitle>{poleDetail.summary.actionCount > 0 ? "Fusion" : "Pole ready"}</SectionTitle>
                 <div
                   style={{
-                    marginTop: "0.35rem",
-                    fontSize: "0.78rem",
-                    lineHeight: 1.45,
+                    marginTop: "0.28rem",
+                    fontSize: "0.74rem",
+                    lineHeight: 1.35,
                     color: poleDetail.summary.actionCount > 0 ? "#991b1b" : "#166534",
                   }}
                 >
                   {poleDetail.summary.actionCount > 0
-                    ? `${poleDetail.summary.needFusionOperationalCount} field fusion task${poleDetail.summary.needFusionOperationalCount === 1 ? "" : "s"} still pending across ${poleDetail.summary.sheathCount} sheaths.`
-                    : "No pending fusion work at this pole."}
+                    ? `${poleDetail.summary.needFusionOperationalCount} pending`
+                    : "No pending fusion work."}
                 </div>
-                {poleDetail.summary.actionCount > 0 && nextActionSummary && (
+                {poleDetail.summary.actionCount > 0 && compactActionSummaries.length > 0 && (
                   <div
                     style={{
-                      marginTop: "0.55rem",
-                      padding: "0.65rem 0.75rem",
-                      borderRadius: "10px",
-                      background: "#ffffff",
-                      border: "1px solid #fecaca",
+                      marginTop: "0.5rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.4rem",
                     }}
                   >
-                    <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#991b1b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      Fuse this fiber
-                    </div>
-                    <div style={{ marginTop: "0.22rem", fontSize: "0.82rem", fontWeight: 700, color: "#7f1d1d", lineHeight: 1.4 }}>
-                      {nextActionSummary.headline}
-                    </div>
-                    {nextActionSummary.detail && (
-                      <div style={{ marginTop: "0.18rem", fontSize: "0.74rem", color: "#475569", lineHeight: 1.4 }}>
-                        {nextActionSummary.detail}
+                    {compactActionSummaries.map((summary) => (
+                      <div
+                        key={summary.key}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.45rem 0.5rem",
+                          borderRadius: "8px",
+                          background: "#ffffff",
+                          border: "1px solid #fecaca",
+                        }}
+                      >
+                        {summary.fiberColor && summary.bufferColor ? (
+                          <>
+                            <ColorChip label="Fiber" color={summary.fiberColor} />
+                            <ColorChip label="Tube" color={summary.bufferColor} />
+                          </>
+                        ) : (
+                          <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#7f1d1d", lineHeight: 1.35 }}>
+                            {summary.headline}
+                          </span>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
                 {poleDetail.summary.inconsistencyCount > 0 && (
@@ -523,7 +810,15 @@ export function PoleDetailContent({ data, compact = false }) {
                   <SectionTitle>Connected poles</SectionTitle>
                   <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                     {poleDetail.connectedPoles.slice(0, 4).map((segment) => (
-                      <Badge key={segment.id} tone="neutral">
+                      <Badge
+                        key={segment.id}
+                        tone="neutral"
+                        onClick={
+                          onNavigateToPole && segment.pole
+                            ? () => onNavigateToPole(segment.pole)
+                            : undefined
+                        }
+                      >
                         {segment.pole?.poleNumber}
                       </Badge>
                     ))}
@@ -540,23 +835,41 @@ export function PoleDetailContent({ data, compact = false }) {
             <div style={{ marginTop: "1rem" }}>
               <SectionTitle>Connected poles</SectionTitle>
               <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.45rem" }}>
-                {poleDetail.connectedPoles.map((segment) => (
-                  <div
-                    key={segment.id}
-                    style={{
-                      padding: "0.65rem 0.75rem",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      background: "#ffffff",
-                      fontSize: "0.8rem",
-                      color: "#334155",
-                    }}
-                  >
-                    <strong style={{ color: "#0f172a" }}>{segment.pole?.poleNumber}</strong>
-                    {segment.pole?.streetName ? ` - ${segment.pole.streetName}` : ""}
-                    {segment.lengthFt ? ` (${segment.lengthFt} ft)` : ""}
-                  </div>
-                ))}
+                {poleDetail.connectedPoles.map((segment) => {
+                  const canNavigate = Boolean(onNavigateToPole && segment.pole);
+                  return (
+                    <div
+                      key={segment.id}
+                      role={canNavigate ? "button" : undefined}
+                      tabIndex={canNavigate ? 0 : undefined}
+                      onClick={canNavigate ? () => onNavigateToPole(segment.pole) : undefined}
+                      onKeyDown={
+                        canNavigate
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onNavigateToPole(segment.pole);
+                              }
+                            }
+                          : undefined
+                      }
+                      style={{
+                        padding: "0.65rem 0.75rem",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        background: "#ffffff",
+                        fontSize: "0.8rem",
+                        color: "#334155",
+                        cursor: canNavigate ? "pointer" : undefined,
+                        textAlign: "left",
+                      }}
+                    >
+                      <strong style={{ color: "#0f172a" }}>{segment.pole?.poleNumber}</strong>
+                      {segment.pole?.streetName ? ` - ${segment.pole.streetName}` : ""}
+                      {segment.lengthFt ? ` (${segment.lengthFt} ft)` : ""}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -663,6 +976,15 @@ export function PoleDetailContent({ data, compact = false }) {
             </>
           )}
         </>
+      )}
+
+      {poleDetail && isMapPopover && (
+        <MapPopoverSupplement
+          data={data}
+          poleDetail={poleDetail}
+          compactActionSummaries={compactActionSummaries}
+          onNavigateToPole={onNavigateToPole}
+        />
       )}
     </>
   );

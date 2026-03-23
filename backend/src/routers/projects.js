@@ -9,9 +9,43 @@ import {
   persistParsedImport,
 } from "../services/project-import.js";
 import { enrichProjectPoleStreetNames } from "../services/reverse-geocode.js";
+import { hasRenderableCoordinates } from "../lib/geo.js";
 
 const EXCEL_EXT = /\.(xlsx|xls)$/i;
 const ZIP_EXT = /\.zip$/i;
+
+async function deleteProjectGraph(tx, projectId) {
+  await tx.fiberAssignment.deleteMany({
+    where: {
+      OR: [
+        { equipment: { projectId } },
+        { fiberRecord: { sheath: { projectId } } },
+      ],
+    },
+  });
+
+  await tx.fiberEndpointObservation.deleteMany({
+    where: {
+      OR: [
+        { pole: { projectId } },
+        { fiberRecord: { sheath: { projectId } } },
+      ],
+    },
+  });
+
+  await tx.fiberRecord.deleteMany({ where: { sheath: { projectId } } });
+
+  await tx.sheathEndpoint.deleteMany({
+    where: {
+      OR: [{ pole: { projectId } }, { sheath: { projectId } }],
+    },
+  });
+
+  await tx.sheath.deleteMany({ where: { projectId } });
+  await tx.equipment.deleteMany({ where: { projectId } });
+  await tx.fiberSegment.deleteMany({ where: { projectId } });
+  await tx.pole.deleteMany({ where: { projectId } });
+}
 
 export const projectsRouter = router({
   list: publicProcedure.query(async () => {
@@ -33,6 +67,35 @@ export const projectsRouter = router({
           createdBy: { select: { name: true, email: true } },
         },
       });
+    }),
+
+  /** Bounding box of poles with valid coordinates; used to focus the map on a project. */
+  getMapBounds: publicProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => {
+      const poles = await prisma.pole.findMany({
+        where: { projectId: input.projectId },
+        select: { lat: true, lng: true },
+      });
+      const valid = poles.filter((p) =>
+        hasRenderableCoordinates(parseFloat(p.lat), parseFloat(p.lng))
+      );
+      if (valid.length === 0) return null;
+
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      let minLng = Infinity;
+      let maxLng = -Infinity;
+      for (const p of valid) {
+        const lat = parseFloat(p.lat);
+        const lng = parseFloat(p.lng);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+        minLng = Math.min(minLng, lng);
+        maxLng = Math.max(maxLng, lng);
+      }
+
+      return { minLat, maxLat, minLng, maxLng };
     }),
 
   previewImportFile: protectedProcedure
@@ -91,7 +154,7 @@ export const projectsRouter = router({
         (tx) => persistParsedImport(tx, input, ctx.user.id, parsed, verification),
         {
           maxWait: 10_000,
-          timeout: 60_000,
+          timeout: 180_000,
         }
       );
 
@@ -105,12 +168,25 @@ export const projectsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
-      await prisma.project.delete({ where: { id: input.id } });
+      await prisma.$transaction(async (tx) => {
+        await deleteProjectGraph(tx, input.id);
+        await tx.project.delete({ where: { id: input.id } });
+      });
       return { success: true };
     }),
 
   deleteAll: protectedProcedure.mutation(async () => {
-    await prisma.project.deleteMany();
+    await prisma.$transaction(async (tx) => {
+      await tx.fiberAssignment.deleteMany();
+      await tx.fiberEndpointObservation.deleteMany();
+      await tx.fiberRecord.deleteMany();
+      await tx.sheathEndpoint.deleteMany();
+      await tx.sheath.deleteMany();
+      await tx.equipment.deleteMany();
+      await tx.fiberSegment.deleteMany();
+      await tx.pole.deleteMany();
+      await tx.project.deleteMany();
+    });
     return { success: true };
   }),
 });

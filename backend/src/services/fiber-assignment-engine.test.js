@@ -15,6 +15,20 @@ describe("fiber-assignment-engine", () => {
     assert.strictEqual(seq[11], "AQUA");
   });
 
+  it("parses full color names PINK ROSE VIOLET (Excel), not only 2-letter codes", () => {
+    const rows = [
+      ["BUFFER", "FIBER", "CONNECTION"],
+      ["ORANGE", "PINK", "DARK"],
+      ["ORANGE", "ROSE", "DARK"],
+      ["ORANGE", "VIOLET", "DARK"],
+    ];
+    const { records } = parseFiberRows(rows);
+    assert.strictEqual(records.length, 3);
+    assert.strictEqual(records[0].fiberColor, "PINK");
+    assert.strictEqual(records[1].fiberColor, "PINK");
+    assert.strictEqual(records[2].fiberColor, "VIOLET");
+  });
+
   it("parses fiber rows with buffer and fiber color codes", () => {
     const rows = [
       ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION", "WAVELENGTH"],

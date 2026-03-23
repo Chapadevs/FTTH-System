@@ -33,10 +33,46 @@ const COLOR_CODE_MAP = {
   AQ: 11,
 };
 
+/** Full-word matches (Excel often uses PINK / ROSE / VIOLET, not RS / PI). */
+const COLOR_NAME_TO_INDEX = {
+  BLUE: 0,
+  ORANGE: 1,
+  GREEN: 2,
+  BROWN: 3,
+  SLATE: 4,
+  WHITE: 5,
+  RED: 6,
+  BLACK: 7,
+  YELLOW: 8,
+  VIOLET: 9,
+  PINK: 10,
+  ROSE: 10,
+  AQUA: 11,
+};
+
+const INDEX_TO_CODE = Object.fromEntries(
+  Object.entries(COLOR_CODE_MAP).map(([code, idx]) => [idx, code])
+);
+
+/** TIA Rose; persisted as PINK */
+function humanFiberColorLabel(color) {
+  return color === "PINK" ? "ROSE" : color;
+}
+
 function normalizeColorCode(raw) {
   if (raw == null || typeof raw !== "string") return null;
-  const code = String(raw).trim().toUpperCase().slice(0, 2);
-  return COLOR_CODE_MAP[code] !== undefined ? code : null;
+  const s = String(raw).trim().toUpperCase().replace(/\s+/g, "");
+  if (!s) return null;
+
+  if (Object.prototype.hasOwnProperty.call(COLOR_NAME_TO_INDEX, s)) {
+    const idx = COLOR_NAME_TO_INDEX[s];
+    return INDEX_TO_CODE[idx];
+  }
+
+  const code2 = s.slice(0, 2);
+  if (COLOR_CODE_MAP[code2] !== undefined) return code2;
+
+  return null;
 }
 
 function parseConnection(raw) {
@@ -204,7 +240,7 @@ export function buildVisitPlan(records) {
         deviceName: r.deviceName,
         portName: r.portName,
         wavelength: r.wavelength,
-        instruction: `Fuse ${r.fiberColor} fiber in ${r.bufferColor} tube${r.deviceName ? ` → ${r.deviceName}` : ""}${r.portName ? ` ${r.portName}` : ""}`,
+        instruction: `Fuse ${humanFiberColorLabel(r.fiberColor)} fiber in ${humanFiberColorLabel(r.bufferColor)} tube${r.deviceName ? ` → ${r.deviceName}` : ""}${r.portName ? ` ${r.portName}` : ""}`,
       });
     }
   }

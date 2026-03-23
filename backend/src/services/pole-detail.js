@@ -1,4 +1,52 @@
+import { getFiberColorIndex } from "./fiber-assignment-engine.js";
 import { annotateFibersForPole, summarizeAnnotatedFibers } from "./fusion-planner.js";
+
+/** TIA-598 Rose; persisted as PINK */
+function formatFiberColorLabel(fiberColor) {
+  return fiberColor === "PINK" ? "ROSE" : fiberColor;
+}
+
+function formatBufferColorLabel(bufferColor) {
+  return bufferColor === "PINK" ? "ROSE" : bufferColor;
+}
+
+function mergeAnnotatedFiberPair(a, b) {
+  const operationalNeedFusion = a.operationalNeedFusion || b.operationalNeedFusion;
+  const dataIssue = a.dataIssue || b.dataIssue;
+  const status = operationalNeedFusion
+    ? "INCONSISTENT"
+    : a.status === "ACTIVE" && b.status === "ACTIVE"
+      ? "ACTIVE"
+      : "DARK";
+
+  return {
+    ...a,
+    operationalNeedFusion,
+    dataIssue,
+    status,
+  };
+}
+
+function mergeAnnotatedFibersForSheathEndpoints(pole, sheath, endpoints) {
+  const merged = new Map();
+  for (const endpoint of endpoints) {
+    const fibers = annotateFibersForPole({ pole, endpoint, fiberRecords: sheath.fiberRecords });
+    for (const fiber of fibers) {
+      const prev = merged.get(fiber.id);
+      merged.set(fiber.id, prev ? mergeAnnotatedFiberPair(prev, fiber) : fiber);
+    }
+  }
+  return Array.from(merged.values()).sort((a, b) => {
+    const bufferDelta =
+      (a.bufferIndex ?? getFiberColorIndex(a.bufferColor)) -
+      (b.bufferIndex ?? getFiberColorIndex(b.bufferColor));
+    if (bufferDelta !== 0) return bufferDelta;
+    return (
+      (a.fiberIndex ?? getFiberColorIndex(a.fiberColor)) -
+      (b.fiberIndex ?? getFiberColorIndex(b.fiberColor))
+    );
+  });
+}
 
 function buildAssignmentLabel(assignment) {
   const parts = [];
@@ -39,8 +87,10 @@ function buildFiberAction(fiber, sheathName, role, connectedPoleNumbers) {
     ? fiber.assignments.map(buildAssignmentLabel).filter(Boolean).join(", ")
     : "missing assignment";
   const endpointLabel = role === "END" ? "tail endpoint" : "start endpoint";
+  const fiberLabel = formatFiberColorLabel(fiber.fiberColor);
+  const bufferLabel = formatBufferColorLabel(fiber.bufferColor);
 
-  return `Fuse ${fiber.fiberColor} fiber in ${fiber.bufferColor} tube${direction} on ${sheathLabel}${connectedLabel} (${endpointLabel}) - ${assignmentLabel || "missing assignment"}`;
+  return `Fuse ${fiberLabel} fiber in ${bufferLabel} tube${direction} on ${sheathLabel}${connectedLabel} (${endpointLabel}) - ${assignmentLabel || "missing assignment"}`;
 }
 
 export function buildPoleDetail(pole) {
@@ -69,10 +119,17 @@ export function buildPoleDetail(pole) {
     }
   }
 
+  const endpointsBySheath = new Map();
   for (const endpoint of pole.sheathEndpoints || []) {
     const sheath = endpoint.sheath;
     if (!sheath) continue;
+    if (!endpointsBySheath.has(sheath.id)) {
+      endpointsBySheath.set(sheath.id, { sheath, endpoints: [] });
+    }
+    endpointsBySheath.get(sheath.id).endpoints.push(endpoint);
+  }
 
+  for (const { sheath, endpoints } of endpointsBySheath.values()) {
     const connectedPoleNumbers = Array.from(
       new Set(
         (sheath.endpoints || [])
@@ -82,20 +139,17 @@ export function buildPoleDetail(pole) {
       )
     );
 
-    const fibers = annotateFibersForPole({
-      pole,
-      endpoint,
-      fiberRecords: sheath.fiberRecords,
-    });
+    const fibers = mergeAnnotatedFibersForSheathEndpoints(pole, sheath, endpoints);
     const summary = summarizeAnnotatedFibers(fibers);
+    const roleForAction = endpoints.some((e) => e.role === "END") ? "END" : endpoints[0].role;
     const actions = fibers
-      .map((fiber) => buildFiberAction(fiber, sheath.name, endpoint.role, connectedPoleNumbers))
+      .map((fiber) => buildFiberAction(fiber, sheath.name, roleForAction, connectedPoleNumbers))
       .filter(Boolean);
 
     sheathMap.set(sheath.id, {
       id: sheath.id,
       name: sheath.name,
-      role: endpoint.role,
+      role: roleForAction,
       connectedPoleNumbers,
       summary,
       fibers,
@@ -112,6 +166,7 @@ export function buildPoleDetail(pole) {
       acc.needFusionOperationalCount += sheath.summary.needFusionOperationalCount;
       acc.inconsistencyCount += sheath.summary.inconsistencyCount;
       acc.actionCount += sheath.actions.length;
+      acc.fiberRecordCount += sheath.fibers.length;
       return acc;
     },
     {
@@ -121,6 +176,7 @@ export function buildPoleDetail(pole) {
       needFusionOperationalCount: 0,
       inconsistencyCount: 0,
       actionCount: 0,
+      fiberRecordCount: 0,
     }
   );
 

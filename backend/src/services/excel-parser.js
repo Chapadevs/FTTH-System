@@ -50,6 +50,36 @@ function parseCoordinatePair(raw) {
   return { lat, lng };
 }
 
+function isValidCoordinate(lat, lng) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+function hasUsableCoordinates(pole) {
+  if (!pole) return false;
+  return isValidCoordinate(pole.lat, pole.lng) && !(pole.lat === 0 && pole.lng === 0);
+}
+
+function mergePoleRecord(existingPole, nextPole) {
+  if (!existingPole) return nextPole;
+  const existingHasCoords = hasUsableCoordinates(existingPole);
+  const nextHasCoords = hasUsableCoordinates(nextPole);
+
+  return {
+    ...existingPole,
+    streetName: existingPole.streetName || nextPole.streetName || "",
+    ...(nextHasCoords && !existingHasCoords
+      ? { lat: nextPole.lat, lng: nextPole.lng }
+      : {}),
+  };
+}
+
 function getRowLabel(row) {
   return normalizeHeader(row?.[0] ?? "");
 }
@@ -370,34 +400,37 @@ export function parseExcelWorkbook(workbook, options = {}) {
         const lng = colLng >= 0 ? parseFloat(get(colLng)) : NaN;
         const hasCoords = !isNaN(lat) && !isNaN(lng);
 
-        if (!mergedPoles.has(from)) {
-          const fromCoords =
-            enclosureMeta?.enclosureName === from && enclosureMeta.coords
-              ? enclosureMeta.coords
-              : null;
-          mergedPoles.set(from, {
-            poleNumber: from,
-            streetName: street,
-            lat: fromCoords ? fromCoords.lat : (hasCoords ? lat : 0),
-            lng: fromCoords ? fromCoords.lng : (hasCoords ? lng : 0),
-          });
-        }
-        if (!mergedPoles.has(to)) {
-          mergedPoles.set(to, { poleNumber: to, streetName: "", lat: 0, lng: 0 });
-        }
+        const fromCoords =
+          enclosureMeta?.enclosureName === from && enclosureMeta.coords
+            ? enclosureMeta.coords
+            : null;
+        const fromCandidate = {
+          poleNumber: from,
+          streetName: street,
+          lat: fromCoords ? fromCoords.lat : (hasCoords ? lat : 0),
+          lng: fromCoords ? fromCoords.lng : (hasCoords ? lng : 0),
+        };
+        mergedPoles.set(from, mergePoleRecord(mergedPoles.get(from), fromCandidate));
+
+        const toCandidate = { poleNumber: to, streetName: "", lat: 0, lng: 0 };
+        mergedPoles.set(to, mergePoleRecord(mergedPoles.get(to), toCandidate));
       } else {
         const poleNum = get(colPole);
         if (!poleNum) {
           sheetSkipped++;
           continue;
         }
-        if (!mergedPoles.has(poleNum)) {
-          const street = get(colStreet) || "";
-          const lat = colLat >= 0 ? parseFloat(get(colLat)) : NaN;
-          const lng = colLng >= 0 ? parseFloat(get(colLng)) : NaN;
-          const hasCoords = !isNaN(lat) && !isNaN(lng);
-          mergedPoles.set(poleNum, { poleNumber: poleNum, streetName: street, lat: hasCoords ? lat : 0, lng: hasCoords ? lng : 0 });
-        }
+        const street = get(colStreet) || "";
+        const lat = colLat >= 0 ? parseFloat(get(colLat)) : NaN;
+        const lng = colLng >= 0 ? parseFloat(get(colLng)) : NaN;
+        const hasCoords = !isNaN(lat) && !isNaN(lng);
+        const candidate = {
+          poleNumber: poleNum,
+          streetName: street,
+          lat: hasCoords ? lat : 0,
+          lng: hasCoords ? lng : 0,
+        };
+        mergedPoles.set(poleNum, mergePoleRecord(mergedPoles.get(poleNum), candidate));
       }
     }
     totalSkipped += sheetSkipped;

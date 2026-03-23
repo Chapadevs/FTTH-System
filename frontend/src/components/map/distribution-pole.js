@@ -11,6 +11,18 @@ export function isDistributionPole(poleOrPoleNumber) {
   return /^[A-Z]+\d+D\d+$/i.test(normalizePoleNumber(poleNumber));
 }
 
+export function isSplitterPole(poleOrPoleNumber) {
+  const poleNumber =
+    typeof poleOrPoleNumber === "string"
+      ? poleOrPoleNumber
+      : poleOrPoleNumber?.poleNumber;
+  const normalizedPoleNumber = normalizePoleNumber(poleNumber);
+
+  if (isDistributionPole(normalizedPoleNumber)) return false;
+
+  return normalizedPoleNumber.includes("_SE_") || /S\d+$/i.test(normalizedPoleNumber);
+}
+
 function uniquePolesById(poles) {
   const seen = new Set();
 
@@ -57,8 +69,28 @@ export function buildDirectServedPoleLookup(poles, segments) {
   return servedLookup;
 }
 
-export function decorateMapPole(pole, servedLookup) {
+export function buildPoleConnectionCountLookup(poles, segments) {
+  const connectionLookup = new Map((poles || []).map((pole) => [pole.id, 0]));
+
+  function incrementConnectionCount(poleId) {
+    if (!poleId) return;
+    connectionLookup.set(poleId, (connectionLookup.get(poleId) || 0) + 1);
+  }
+
+  for (const segment of segments || []) {
+    incrementConnectionCount(segment?.fromPole?.id);
+    incrementConnectionCount(segment?.toPole?.id);
+  }
+
+  return connectionLookup;
+}
+
+export function decorateMapPole(pole, servedLookup, connectionLookup) {
   const directServedPoles = servedLookup.get(pole.id) || [];
+  const connectedPoleCount =
+    connectionLookup?.get?.(pole.id) ??
+    pole?.summary?.connectedPoleCount ??
+    0;
   const distribution = {
     isDistribution: isDistributionPole(pole),
     directServedPoles,
@@ -67,6 +99,10 @@ export function decorateMapPole(pole, servedLookup) {
 
   return {
     ...pole,
+    summary: {
+      ...(pole.summary || {}),
+      connectedPoleCount,
+    },
     distribution,
   };
 }
