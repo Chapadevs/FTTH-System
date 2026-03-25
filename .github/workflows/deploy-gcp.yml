@@ -4,7 +4,7 @@ name: Deploy to GCP
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
 
 env:
   GCP_REGION: us-central1
