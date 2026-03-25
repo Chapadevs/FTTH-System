@@ -29,6 +29,77 @@ describe("fiber-assignment-engine", () => {
     assert.strictEqual(records[2].fiberColor, "VIOLET");
   });
 
+  it("parses PI as the pink/rose fiber code used in some sheets", () => {
+    const rows = [
+      ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION"],
+      ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "PI", "<- FUSION ->"],
+      ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "PI", "AQ", "<- FUSION ->"],
+    ];
+    const { records } = parseFiberRows(rows);
+    assert.strictEqual(records.length, 2);
+    assert.strictEqual(records[0].bufferColor, "BLUE");
+    assert.strictEqual(records[0].fiberColor, "PINK");
+    assert.strictEqual(records[1].bufferColor, "PINK");
+    assert.strictEqual(records[1].fiberColor, "AQUA");
+  });
+
+  it("treats N/A-like placeholders as empty assignment fields", () => {
+    const rows = [
+      ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION", "DEVICE NAME", "PORT NAME"],
+      ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "BK", "<- CONTINUOUS ->", "N/A", "N/A"],
+      ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "YE", "<- CONTINUOUS ->", "NA", "-"],
+    ];
+    const { records } = parseFiberRows(rows);
+    assert.strictEqual(records.length, 2);
+    assert.strictEqual(records[0].deviceName, null);
+    assert.strictEqual(records[0].portName, null);
+    assert.strictEqual(records[1].deviceName, null);
+    assert.strictEqual(records[1].portName, null);
+    assert.strictEqual(records[0].connectionType, "DARK");
+    assert.strictEqual(records[1].connectionType, "DARK");
+  });
+
+  it("does not treat DEVICE UUID / REPORT columns as assignment demand", () => {
+    const rows = [
+      [
+        "SHEATH UUID",
+        "SHEATH NAME",
+        "START ENCLOSURE",
+        "END ENCLOSURE",
+        "BUFFER",
+        "FIBER",
+        "SUB-CIRCUIT",
+        "WAVELENGTH",
+        "CIRCUIT",
+        "CONNECTION",
+        "DEVICE UUID",
+        "REPORT DATE",
+      ],
+      [
+        "d9cec964-551e-4286-a480-ad0e43a6aefe",
+        "2302E_SE_006_TO_2302E_FT_068_48CT",
+        "2302E_SE_006",
+        "2302E_FT_068",
+        "BL",
+        "BK",
+        "N/A",
+        "N/A",
+        "N/A",
+        "<- CONTINUOUS ->",
+        "f4124ddd-65fb-45c9-b9df-0ae6fc9a92fe",
+        "2/26/2025",
+      ],
+    ];
+
+    const { records } = parseFiberRows(rows);
+    assert.strictEqual(records.length, 1);
+    assert.strictEqual(records[0].bufferColor, "BLUE");
+    assert.strictEqual(records[0].fiberColor, "BLACK");
+    assert.strictEqual(records[0].connectionType, "DARK");
+    assert.strictEqual(records[0].deviceName, null);
+    assert.strictEqual(records[0].portName, null);
+  });
+
   it("parses fiber rows with buffer and fiber color codes", () => {
     const rows = [
       ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION", "WAVELENGTH"],

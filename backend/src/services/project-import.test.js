@@ -72,6 +72,73 @@ describe("project-import", () => {
     );
   });
 
+  it("preserves PI rows as pink fibers during workbook import", () => {
+    const buffer = workbookBufferFromSheets([
+      ["Map", [
+        ["START ENCLOSURE", "END ENCLOSURE"],
+        ["2302E_SE_006", "2302E_FT_068"],
+      ]],
+      ["Fiber", [
+        ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION", "PORT NAME"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "PI", "<- FUSION ->", "PORT1"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "AQ", "<- FUSION ->", "PORT2"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "OR", "BL", "<- FUSION ->", "PORT3"],
+      ]],
+    ]);
+
+    const parsed = parseImportFile(buffer, "pink-pi-import.xlsx");
+    const verification = buildImportVerification(parsed);
+    const fibersByColor = verification.fiber.summary.bySheath["48CT 2302E_SE_006 TO 2302E_FT_068"].fibers
+      .map((fiber) => `${fiber.bufferColor}/${fiber.fiberColor}`)
+      .sort();
+
+    assert.strictEqual(verification.fiber.recordCount, 3);
+    assert.ok(fibersByColor.includes("BLUE/PINK"));
+    assert.ok(fibersByColor.includes("BLUE/AQUA"));
+    assert.ok(fibersByColor.includes("ORANGE/BLUE"));
+  });
+
+  it("flags only actual fusion rows when continuous rows contain N/A placeholders", () => {
+    const buffer = workbookBufferFromSheets([
+      ["Map", [
+        ["START ENCLOSURE", "END ENCLOSURE"],
+        ["2302E_SE_006", "2302E_FT_068"],
+      ]],
+      ["Fiber", [
+        [
+          "SHEATH NAME",
+          "START ENCLOSURE",
+          "END ENCLOSURE",
+          "BUFFER",
+          "FIBER",
+          "CONNECTION",
+          "WAVELENGTH",
+          "DEVICE NAME",
+          "PORT NAME",
+        ],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "PI", "<- FUSION ->", "", "N/A", "PORT1"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "AQ", "<- FUSION ->", "", "N/A", "PORT2"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "OR", "BL", "<- FUSION ->", "", "N/A", "PORT3"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "BK", "<- CONTINUOUS ->", "", "N/A", "N/A"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "YE", "<- CONTINUOUS ->", "", "NA", "-"],
+        ["48CT 2302E_SE_006 TO 2302E_FT_068", "2302E_SE_006", "2302E_FT_068", "BL", "VI", "<- CONTINUOUS ->", "", "N/A", "N/A"],
+      ]],
+    ]);
+
+    const parsed = parseImportFile(buffer, "fusion-scope-control.xlsx");
+    const verification = buildImportVerification(parsed);
+    const inconsistencyFibers = verification.fiber.summary.inconsistencies
+      .map((issue) => issue.fiber)
+      .sort();
+
+    assert.strictEqual(verification.fiber.recordCount, 6);
+    assert.strictEqual(verification.fiber.summary.inconsistencies.length, 3);
+    assert.deepStrictEqual(
+      inconsistencyFibers,
+      ["BLUE/AQUA", "BLUE/PINK", "ORANGE/BLUE"]
+    );
+  });
+
   it("preserves endpoint-level observations and only creates meaningful assignments", () => {
     const poleMap = new Map([
       ["A", { id: "pole-a", poleNumber: "A" }],

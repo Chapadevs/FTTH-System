@@ -652,21 +652,21 @@ export function PoleDetailContent({ data, compact = false, onNavigateToPole, var
       {isMapPopover ? (
         <div
           style={{
-            padding: "0.75rem",
-            borderRadius: "12px",
+            padding: "0.55rem 0.6rem",
+            borderRadius: "10px",
             background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
             border: "1px solid #e2e8f0",
           }}
         >
-          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {isDistribution ? "Distribution pole" : "Pole"}
           </div>
-          <div style={{ marginTop: "0.18rem", fontSize: "0.82rem", color: "#0f172a", fontWeight: 700, lineHeight: 1.35 }}>
+          <div style={{ marginTop: "0.12rem", fontSize: "0.76rem", color: "#0f172a", fontWeight: 700, lineHeight: 1.35 }}>
             {displayData?.streetName || "Street unavailable"}
           </div>
-          <div style={{ marginTop: "0.45rem" }}>
-            <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>Coordinates</div>
-            <div style={{ marginTop: "0.15rem", fontSize: "0.78rem", color: "#334155", lineHeight: 1.35 }}>
+          <div style={{ marginTop: "0.35rem" }}>
+            <div style={{ fontSize: "0.66rem", color: "#64748b", fontWeight: 600 }}>Coordinates</div>
+            <div style={{ marginTop: "0.12rem", fontSize: "0.74rem", color: "#334155", lineHeight: 1.35 }}>
               {displayData?.lat ?? data?.lat}, {displayData?.lng ?? data?.lng}
             </div>
           </div>
@@ -674,8 +674,8 @@ export function PoleDetailContent({ data, compact = false, onNavigateToPole, var
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "0.5rem",
-              marginTop: "0.7rem",
+              gap: "0.4rem",
+              marginTop: "0.45rem",
             }}
           >
             <CompactMetricCard label="Active fibers" value={poleDetail?.summary?.activeCount ?? "—"} tone="success" />

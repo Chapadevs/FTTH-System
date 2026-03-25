@@ -3,6 +3,7 @@ import { router, publicProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
 import { hasRenderableCoordinates } from "../lib/geo.js";
 import { buildPoleDetail } from "../services/pole-detail.js";
+import { getStreetRoute } from "../services/street-routing.js";
 
 export const mapRouter = router({
   getData: publicProcedure
@@ -90,6 +91,55 @@ export const mapRouter = router({
             hasRenderableCoordinates(seg.fromPole.lat, seg.fromPole.lng) &&
             hasRenderableCoordinates(seg.toPole.lat, seg.toPole.lng)
         ),
+      };
+    }),
+  streetRoute: publicProcedure
+    .input(
+      z.object({
+        poleId: z.string().min(1),
+        origin: z.object({
+          lat: z.number().finite(),
+          lng: z.number().finite(),
+        }),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const pole = await prisma.pole.findUnique({
+        where: { id: input.poleId },
+        select: {
+          id: true,
+          poleNumber: true,
+          streetName: true,
+          lat: true,
+          lng: true,
+        },
+      });
+
+      if (!pole) {
+        throw new Error("Pole not found.");
+      }
+
+      if (!hasRenderableCoordinates(pole.lat, pole.lng)) {
+        throw new Error("The selected pole does not have valid coordinates.");
+      }
+
+      const route = await getStreetRoute({
+        origin: input.origin,
+        destination: {
+          lat: Number(pole.lat),
+          lng: Number(pole.lng),
+        },
+      });
+
+      return {
+        ...route,
+        pole: {
+          id: pole.id,
+          poleNumber: pole.poleNumber,
+          streetName: pole.streetName,
+          lat: Number(pole.lat),
+          lng: Number(pole.lng),
+        },
       };
     }),
 });

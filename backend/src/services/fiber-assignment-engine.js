@@ -30,10 +30,11 @@ const COLOR_CODE_MAP = {
   YE: 8,
   VI: 9,
   RS: 10,
+  PI: 10,
   AQ: 11,
 };
 
-/** Full-word matches (Excel often uses PINK / ROSE / VIOLET, not RS / PI). */
+/** Full-word matches (Excel often uses PINK / ROSE / VIOLET instead of short codes). */
 const COLOR_NAME_TO_INDEX = {
   BLUE: 0,
   ORANGE: 1,
@@ -82,6 +83,26 @@ function parseConnection(raw) {
   return "DARK";
 }
 
+function normalizeTextField(raw) {
+  if (raw == null) return null;
+  const value = String(raw).trim();
+  if (!value) return null;
+
+  const normalized = value.toUpperCase();
+  if (
+    normalized === "N/A" ||
+    normalized === "NA" ||
+    normalized === "NONE" ||
+    normalized === "NULL" ||
+    normalized === "-" ||
+    normalized === "--"
+  ) {
+    return null;
+  }
+
+  return value;
+}
+
 function rowToFiberRecord(row, getColumn) {
   const bufferRaw = getColumn(row, "buffer", "BUFFER");
   const fiberRaw = getColumn(row, "fiber", "FIBER");
@@ -108,9 +129,9 @@ function rowToFiberRecord(row, getColumn) {
   const wavelength = Number.isFinite(parsedWavelength) && parsedWavelength > 0 ? parsedWavelength : null;
 
   return {
-    sheathName: sheathRaw ? String(sheathRaw).trim() : null,
-    startEnclosure: startRaw ? String(startRaw).trim() : null,
-    endEnclosure: endRaw ? String(endRaw).trim() : null,
+    sheathName: normalizeTextField(sheathRaw),
+    startEnclosure: normalizeTextField(startRaw),
+    endEnclosure: normalizeTextField(endRaw),
     bufferColor: FIBER_COLORS[bufferIndex],
     fiberColor: FIBER_COLORS[fiberIndex],
     bufferIndex,
@@ -118,8 +139,8 @@ function rowToFiberRecord(row, getColumn) {
     rawConnection,
     connectionType,
     wavelength,
-    deviceName: deviceRaw ? String(deviceRaw).trim() : null,
-    portName: portRaw ? String(portRaw).trim() : null,
+    deviceName: normalizeTextField(deviceRaw),
+    portName: normalizeTextField(portRaw),
   };
 }
 
@@ -141,7 +162,7 @@ function buildColumnGetter(headers) {
         .toLowerCase()
         .replace(/[\s\-\.]+/g, "_")
         .replace(/[^a-z0-9_]/g, "");
-      const idx = normalized.findIndex((h) => h === key || (h && key && h.includes(key)));
+      const idx = normalized.findIndex((h) => h === key);
       if (idx >= 0 && row[idx] != null && row[idx] !== "") return row[idx];
     }
     return null;

@@ -53,6 +53,7 @@ export function getPoleFiberObservation(pole, endpoint, fiberRecord) {
 }
 
 export function isOperationalNeedFusion(observation, fiberRecord) {
+  if (fiberRecord?.connectionType !== "FUSION") return false;
   if (observation?.state === "ACTIVE") return false;
   if (observation?.state === "NEEDS_FUSION" && hasAssignmentData(observation)) return true;
   if (!hasDataInconsistency(fiberRecord)) return false;

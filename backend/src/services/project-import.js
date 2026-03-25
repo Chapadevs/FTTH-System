@@ -238,7 +238,10 @@ function endpointMatchesAssignment(endpoint, record) {
 function deriveObservationState(record, endpoint) {
   const hasWavelength = record.wavelength != null;
   if (endpointMatchesAssignment(endpoint, record)) {
-    return record.connectionType === "FUSION" && hasWavelength ? "ACTIVE" : "NEEDS_FUSION";
+    if (record.connectionType === "FUSION") {
+      return hasWavelength ? "ACTIVE" : "NEEDS_FUSION";
+    }
+    return "DARK";
   }
   if (record.connectionType === "FUSION" && hasWavelength) return "ACTIVE";
   return "DARK";

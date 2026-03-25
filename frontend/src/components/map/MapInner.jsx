@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -8,7 +8,7 @@ import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import "react-leaflet-markercluster/styles";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { trpc } from "../../lib/trpc.js";
 import { PoleMarker } from "./PoleMarker.jsx";
 import { EquipmentMarker } from "./EquipmentMarker.jsx";
@@ -36,6 +36,17 @@ const defaultCenter = [
 const defaultZoom = parseInt(import.meta.env.VITE_MAP_ZOOM || "13", 10);
 const searchFocusZoom = Math.max(defaultZoom, 17);
 const maxSearchResults = 7;
+const geolocationOptions = {
+  enableHighAccuracy: false,
+  maximumAge: 120000,
+  timeout: 30000,
+};
+const cachedGeolocationOptions = {
+  enableHighAccuracy: false,
+  maximumAge: Infinity,
+  timeout: 10000,
+};
+const lastKnownLocationStorageKey = "fiberops-last-known-location";
 
 const overlayCardStyle = {
   background: "rgba(255,255,255,0.96)",
@@ -66,6 +77,16 @@ function formatDistance(distanceMeters) {
   return `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
+function formatDuration(durationSeconds) {
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) return null;
+  if (durationSeconds < 60) return `${Math.max(1, Math.round(durationSeconds))} sec`;
+  const roundedMinutes = Math.round(durationSeconds / 60);
+  if (roundedMinutes < 60) return `${roundedMinutes} min`;
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
 function getBearingDegrees(fromLat, fromLng, toLat, toLng) {
   const fromLatRad = (fromLat * Math.PI) / 180;
   const toLatRad = (toLat * Math.PI) / 180;
@@ -92,10 +113,87 @@ function getGeolocationErrorMessage(error) {
     case 2:
       return "Your location could not be determined right now. Move to an open area and try again.";
     case 3:
-      return "Location is taking too long to update. Check your signal and try again.";
+      return "Using the last known location while the browser keeps trying to update.";
     default:
       return "Live location is unavailable right now.";
   }
+}
+
+function readLastKnownLocation() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawValue = window.localStorage.getItem(lastKnownLocationStorageKey);
+    if (!rawValue) return null;
+
+    const parsed = JSON.parse(rawValue);
+    if (!hasRenderableLatLng(parsed?.lat, parsed?.lng)) return null;
+
+    return {
+      lat: Number(parsed.lat),
+      lng: Number(parsed.lng),
+      accuracy: Number.isFinite(parsed?.accuracy) ? parsed.accuracy : null,
+      heading: Number.isFinite(parsed?.heading) ? parsed.heading : null,
+      speed: Number.isFinite(parsed?.speed) ? parsed.speed : null,
+      timestamp: Number.isFinite(parsed?.timestamp) ? parsed.timestamp : Date.now(),
+      source: parsed?.source === "ip" ? "ip" : "gps",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeLastKnownLocation(location) {
+  if (typeof window === "undefined") return;
+  if (!hasRenderableLatLng(location?.lat, location?.lng)) return;
+
+  try {
+    window.localStorage.setItem(lastKnownLocationStorageKey, JSON.stringify(location));
+  } catch {
+    // Ignore storage failures and keep the in-memory location instead.
+  }
+}
+
+function toUserPosition(position, source = "gps") {
+  return {
+    lat: position.coords.latitude,
+    lng: position.coords.longitude,
+    accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+    heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null,
+    speed: Number.isFinite(position.coords.speed) ? position.coords.speed : null,
+    timestamp: position.timestamp,
+    source,
+  };
+}
+
+function getCurrentPositionAsync(options) {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+async function fetchApproximateLocation() {
+  const response = await fetch("https://ipwho.is/");
+  if (!response.ok) {
+    throw new Error("Approximate location request failed.");
+  }
+
+  const payload = await response.json();
+  const lat = Number(payload?.latitude);
+  const lng = Number(payload?.longitude);
+  if (!payload?.success || !hasRenderableLatLng(lat, lng)) {
+    throw new Error("Approximate location was unavailable.");
+  }
+
+  return {
+    lat,
+    lng,
+    accuracy: 25000,
+    heading: null,
+    speed: null,
+    timestamp: Date.now(),
+    source: "ip",
+  };
 }
 
 /** One-time fit to all poles when the page loads and data arrives (matches backend map filter). */
@@ -539,7 +637,8 @@ function PolePopupPositionController({ selected, onPositionChange }) {
       const containerRect = map.getContainer().getBoundingClientRect();
       const viewportWidth = window.innerWidth || size.x;
       const viewportHeight = window.innerHeight || size.y;
-      const width = clamp(Math.min(280, size.x - 20, viewportWidth - 24), 224, 280);
+      // Map popover should stay compact so it doesn't cover the map too much.
+      const width = clamp(Math.min(240, size.x - 20, viewportWidth - 24), 190, 240);
       const placement = point.x < size.x * 0.56 ? "right" : "left";
       const left = placement === "right"
         ? clamp(point.x + 28, 12, size.x - width - 12)
@@ -547,7 +646,7 @@ function PolePopupPositionController({ selected, onPositionChange }) {
       const top = clamp(point.y - 44, 60, Math.max(60, size.y - 180));
       const fixedLeft = clamp(containerRect.left + left, 8, Math.max(8, viewportWidth - width - 8));
       const fixedTop = clamp(containerRect.top + top, 72, Math.max(72, viewportHeight - 176));
-      const maxHeight = Math.max(160, Math.min(size.y - top - 12, viewportHeight - fixedTop - 12));
+      const maxHeight = Math.max(130, Math.min(size.y - top - 12, viewportHeight - fixedTop - 12));
       const pointerTop = clamp(containerRect.top + point.y - fixedTop, 18, Math.max(18, maxHeight - 18));
 
       onPositionChange({
@@ -580,7 +679,19 @@ function PolePopupPositionController({ selected, onPositionChange }) {
   return null;
 }
 
-function PoleDetailPopover({ selected, position, onClose, onNavigateToPole, portalRoot }) {
+function PoleDetailPopover({
+  selected,
+  position,
+  onClose,
+  onNavigateToPole,
+  onFindRoute,
+  onClearRoute,
+  hasStreetRoute,
+  isFindingRoute,
+  canFindRoute,
+  routeError,
+  portalRoot,
+}) {
   if (selected?.type !== "pole" || !position) return null;
   if (!portalRoot) return null;
 
@@ -598,7 +709,7 @@ function PoleDetailPopover({ selected, position, onClose, onNavigateToPole, port
         maxHeight: position.maxHeight,
         background: "rgba(255,255,255,0.98)",
         border: "1px solid #e2e8f0",
-        borderRadius: "14px",
+        borderRadius: "12px",
         boxShadow: "0 16px 32px rgba(15, 23, 42, 0.16)",
         backdropFilter: "blur(14px)",
         overflow: "hidden",
@@ -623,20 +734,20 @@ function PoleDetailPopover({ selected, position, onClose, onNavigateToPole, port
       />
       <div
         style={{
-          padding: "0.7rem 0.8rem",
+          padding: "0.45rem 0.6rem",
           borderBottom: "1px solid #e2e8f0",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: "0.6rem",
+          gap: "0.5rem",
           flexShrink: 0,
         }}
       >
         <div>
-          <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: "0.64rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {isDistribution ? "Distribution" : "Pole"}
           </div>
-          <div style={{ marginTop: "0.1rem", fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
+          <div style={{ marginTop: "0.08rem", fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>
             {selected?.data?.poleNumber || "Pole detail"}
           </div>
         </div>
@@ -648,17 +759,60 @@ function PoleDetailPopover({ selected, position, onClose, onNavigateToPole, port
             background: "#f8fafc",
             color: "#475569",
             borderRadius: "999px",
-            width: "1.8rem",
-            height: "1.8rem",
+            width: "1.6rem",
+            height: "1.6rem",
             cursor: "pointer",
-            fontSize: "1rem",
+            fontSize: "0.95rem",
             flexShrink: 0,
           }}
         >
           ×
         </button>
       </div>
-      <div style={{ padding: "0.75rem 0.8rem 0.8rem", overflow: "auto", minHeight: 0 }}>
+      <div style={{ padding: "0.5rem 0.6rem 0.6rem", overflow: "auto", minHeight: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.55rem" }}>
+          <button
+            type="button"
+            onClick={onFindRoute}
+            disabled={!canFindRoute || isFindingRoute}
+            style={{
+              border: "1px solid #0f172a",
+              background: "#0f172a",
+              color: "#ffffff",
+              borderRadius: "999px",
+              padding: "0.38rem 0.55rem",
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              cursor: !canFindRoute || isFindingRoute ? "not-allowed" : "pointer",
+              opacity: !canFindRoute || isFindingRoute ? 0.6 : 1,
+            }}
+          >
+            {isFindingRoute ? "Finding route..." : hasStreetRoute ? "Recalculate route" : "Find routes"}
+          </button>
+          {hasStreetRoute && (
+            <button
+              type="button"
+              onClick={onClearRoute}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#334155",
+                borderRadius: "999px",
+                padding: "0.38rem 0.55rem",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Clear route
+            </button>
+          )}
+        </div>
+        {routeError && (
+          <div style={{ marginBottom: "0.75rem", fontSize: "0.74rem", color: "#b91c1c", lineHeight: 1.4 }}>
+            {routeError}
+          </div>
+        )}
         <PoleDetailContent data={selected.data} compact variant="mapPopover" onNavigateToPole={onNavigateToPole} />
       </div>
     </div>,
@@ -670,9 +824,15 @@ function LocationGuidanceCard({
   isTracking,
   permissionState,
   locationError,
+  routeError,
   userPosition,
   selectedPole,
   guidanceMetrics,
+  streetRoute,
+  routeNeedsRefresh,
+  onFindRoute,
+  onClearRoute,
+  isFindingRoute,
   followUser,
   onStartTracking,
   onStopTracking,
@@ -681,38 +841,52 @@ function LocationGuidanceCard({
 }) {
   const hasPoleTarget = Boolean(selectedPole);
   const hasLocation = Boolean(userPosition);
+  const hasStreetRoute = Boolean(streetRoute?.coordinates?.length);
   const actionButtonStyle = {
     borderRadius: "999px",
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
-    padding: "0.45rem 0.7rem",
-    fontSize: "0.78rem",
+    padding: "0.32rem 0.55rem",
+    fontSize: "0.72rem",
     fontWeight: 700,
     cursor: "pointer",
+    lineHeight: 1.1,
   };
   const mutedButtonStyle = {
     ...actionButtonStyle,
     color: "#94a3b8",
     cursor: "not-allowed",
   };
+  const gpsButtonStyle = {
+    ...actionButtonStyle,
+    minWidth: "2.1rem",
+    justifyContent: "center",
+    padding: "0.32rem 0.45rem",
+    background: "#0f172a",
+    borderColor: "#0f172a",
+    color: "#ffffff",
+  };
+  const shouldShowMetrics = Boolean(guidanceMetrics || hasStreetRoute || locationError || routeError || permissionState === "denied" || permissionState === "unsupported");
 
   return (
-    <div style={{ ...overlayCardStyle, display: "grid", gap: "0.7rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+    <div style={{ ...overlayCardStyle, padding: "0.45rem 0.5rem", display: "grid", gap: "0.35rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
         <div>
-          <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Live guidance
+          <div style={{ fontSize: "0.56rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Guide
           </div>
-          <div style={{ marginTop: "0.15rem", fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
-            {hasPoleTarget ? selectedPole.poleNumber || "Selected pole" : "Select a pole"}
-          </div>
+          {hasPoleTarget && (
+            <div style={{ marginTop: "0.08rem", fontSize: "0.78rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+              {selectedPole.poleNumber || "Selected pole"}
+            </div>
+          )}
         </div>
         <div
           style={{
-            padding: "0.25rem 0.5rem",
+            padding: "0.18rem 0.42rem",
             borderRadius: "999px",
-            fontSize: "0.7rem",
+            fontSize: "0.62rem",
             fontWeight: 800,
             color: isTracking ? "#166534" : "#475569",
             background: isTracking ? "#dcfce7" : "#f8fafc",
@@ -724,75 +898,100 @@ function LocationGuidanceCard({
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gap: "0.32rem",
-          padding: "0.7rem",
-          borderRadius: "12px",
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-        }}
-      >
+      {shouldShowMetrics && (
+        <div
+          style={{
+            display: "grid",
+            gap: "0.24rem",
+            padding: "0.42rem 0.48rem",
+            borderRadius: "10px",
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+          }}
+        >
         {guidanceMetrics ? (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-              <span style={{ fontSize: "0.75rem", color: "#475569" }}>Distance</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
+              <span style={{ fontSize: "0.68rem", color: "#475569" }}>Distance</span>
+              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
                 {guidanceMetrics.distanceLabel}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-              <span style={{ fontSize: "0.75rem", color: "#475569" }}>Direction</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
+              <span style={{ fontSize: "0.68rem", color: "#475569" }}>Direction</span>
+              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
                 {guidanceMetrics.bearingLabel} ({Math.round(guidanceMetrics.bearingDegrees)}deg)
               </span>
             </div>
+            {hasStreetRoute && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                  <span style={{ fontSize: "0.68rem", color: "#475569" }}>Street route</span>
+                  <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
+                    {streetRoute.distanceLabel || "—"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                  <span style={{ fontSize: "0.68rem", color: "#475569" }}>ETA</span>
+                  <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
+                    {streetRoute.durationLabel || "—"}
+                  </span>
+                </div>
+                {streetRoute.nextInstruction && (
+                  <div style={{ marginTop: "0.12rem", fontSize: "0.68rem", color: "#1e293b", lineHeight: 1.35 }}>
+                    Next: {streetRoute.nextInstruction}
+                  </div>
+                )}
+                {routeNeedsRefresh && (
+                  <div style={{ fontSize: "0.66rem", color: "#92400e", lineHeight: 1.35 }}>
+                    Your live position moved since the last route. Recalculate for the latest streets.
+                  </div>
+                )}
+              </>
+            )}
           </>
-        ) : (
-          <div style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.45 }}>
-            {hasPoleTarget
-              ? hasLocation
-                ? "Guidance details will appear as your location updates."
-                : "Start live location to see distance and direction to the selected pole."
-              : "Pick a pole on the map to guide yourself to it."}
-          </div>
-        )}
+        ) : null}
         {hasLocation && Number.isFinite(userPosition.accuracy) && (
-          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+          <div style={{ fontSize: "0.64rem", color: "#64748b" }}>
             Accuracy: about {Math.round(userPosition.accuracy)} m
           </div>
         )}
         {permissionState === "denied" && (
-          <div style={{ fontSize: "0.74rem", color: "#b91c1c" }}>
+          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
             Browser location permission is currently denied.
           </div>
         )}
         {permissionState === "unsupported" && (
-          <div style={{ fontSize: "0.74rem", color: "#b91c1c" }}>
+          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
             This browser does not support geolocation.
           </div>
         )}
         {locationError && (
-          <div style={{ fontSize: "0.74rem", color: "#b91c1c" }}>
+          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
             {locationError}
           </div>
         )}
-      </div>
+        {routeError && (
+          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
+            {routeError}
+          </div>
+        )}
+        </div>
+      )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.28rem" }}>
         {isTracking ? (
-          <button type="button" onClick={onStopTracking} style={{ ...actionButtonStyle, background: "#0f172a", borderColor: "#0f172a", color: "#ffffff" }}>
-            Stop
+          <button type="button" onClick={onStopTracking} style={gpsButtonStyle}>
+            GPS
           </button>
         ) : (
           <button
             type="button"
             onClick={onStartTracking}
             disabled={permissionState === "unsupported"}
-            style={permissionState === "unsupported" ? mutedButtonStyle : { ...actionButtonStyle, background: "#0f172a", borderColor: "#0f172a", color: "#ffffff" }}
+            style={permissionState === "unsupported" ? { ...mutedButtonStyle, minWidth: "2.1rem", padding: "0.32rem 0.45rem" } : gpsButtonStyle}
           >
-            Start location
+            GPS
           </button>
         )}
         <button
@@ -801,7 +1000,7 @@ function LocationGuidanceCard({
           disabled={!hasLocation}
           style={!hasLocation ? mutedButtonStyle : actionButtonStyle}
         >
-          Center on me
+          Center
         </button>
         <button
           type="button"
@@ -815,31 +1014,27 @@ function LocationGuidanceCard({
                 : actionButtonStyle
           }
         >
-          {followUser ? "Following you" : "Follow me"}
+          {followUser ? "Following" : "Follow"}
         </button>
+        {hasStreetRoute && (
+          <button type="button" onClick={onClearRoute} style={actionButtonStyle}>
+            Clear
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function MapLayers({
+const StaticMapLayers = memo(function StaticMapLayers({
   onSelect,
   poles,
   equipment,
   segments,
   poleTypeFilter,
   selectedPoleId,
-  userPosition,
-  guidanceTarget,
 }) {
   const filteredPoles = poles.filter((pole) => matchesPoleTypeFilter(pole, poleTypeFilter));
-  const guidancePositions =
-    userPosition && guidanceTarget
-      ? [
-          [userPosition.lat, userPosition.lng],
-          [guidanceTarget.lat, guidanceTarget.lng],
-        ]
-      : null;
 
   return (
     <>
@@ -854,19 +1049,6 @@ function MapLayers({
           to={seg.toPole}
         />
       ))}
-      {guidancePositions && (
-        <Polyline
-          positions={guidancePositions}
-          pathOptions={{
-            color: "#2563eb",
-            weight: 4,
-            opacity: 0.9,
-            dashArray: "10 8",
-            lineCap: "round",
-          }}
-        />
-      )}
-      <UserLocationMarker location={userPosition} />
       <MarkerClusterGroup
         chunkedLoading
         maxClusterRadius={44}
@@ -892,7 +1074,50 @@ function MapLayers({
       ))}
     </>
   );
-}
+});
+
+const DynamicMapLayers = memo(function DynamicMapLayers({
+  userPosition,
+  guidanceTarget,
+  streetRoutePositions,
+}) {
+  const guidancePositions =
+    !streetRoutePositions && userPosition && guidanceTarget
+      ? [
+          [userPosition.lat, userPosition.lng],
+          [guidanceTarget.lat, guidanceTarget.lng],
+        ]
+      : null;
+
+  return (
+    <>
+      {streetRoutePositions && (
+        <Polyline
+          positions={streetRoutePositions}
+          pathOptions={{
+            color: "#1d4ed8",
+            weight: 5,
+            opacity: 0.9,
+            lineCap: "round",
+          }}
+        />
+      )}
+      {guidancePositions && (
+        <Polyline
+          positions={guidancePositions}
+          pathOptions={{
+            color: "#2563eb",
+            weight: 4,
+            opacity: 0.9,
+            dashArray: "10 8",
+            lineCap: "round",
+          }}
+        />
+      )}
+      <UserLocationMarker location={userPosition} />
+    </>
+  );
+});
 
 export default function MapInner({
   onSelect,
@@ -912,10 +1137,17 @@ export default function MapInner({
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const [locationPermission, setLocationPermission] = useState("prompt");
   const [locationError, setLocationError] = useState("");
-  const [userPosition, setUserPosition] = useState(null);
+  const [routeError, setRouteError] = useState("");
+  const [userPosition, setUserPosition] = useState(() => readLastKnownLocation());
+  const [streetRoute, setStreetRoute] = useState(null);
   const [followUser, setFollowUser] = useState(true);
   const [centerOnUserRequestToken, setCenterOnUserRequestToken] = useState(0);
   const geolocationWatchIdRef = useRef(null);
+  const userPositionRef = useRef(userPosition);
+
+  useEffect(() => {
+    userPositionRef.current = userPosition;
+  }, [userPosition]);
 
   useEffect(() => {
     setPopoverPortalRoot(document.getElementById("pole-map-popover-root"));
@@ -977,6 +1209,51 @@ export default function MapInner({
       bearingLabel: getBearingLabel(bearingDegrees),
     };
   }, [selectedPoleTarget, userPosition]);
+  const activeStreetRoute = useMemo(() => {
+    if (!selectedPoleId) return null;
+    return streetRoute?.pole?.id === selectedPoleId ? streetRoute : null;
+  }, [selectedPoleId, streetRoute]);
+  const streetRoutePositions = useMemo(() => {
+    if (!activeStreetRoute?.coordinates?.length) return null;
+    const positions = activeStreetRoute.coordinates
+      .map((point) => [Number(point?.lat), Number(point?.lng)])
+      .filter(([lat, lng]) => hasRenderableLatLng(lat, lng));
+    return positions.length >= 2 ? positions : null;
+  }, [activeStreetRoute]);
+  const routeOriginDistanceMeters = useMemo(() => {
+    if (!userPosition || !activeStreetRoute?.origin) return null;
+    return L.latLng(userPosition.lat, userPosition.lng).distanceTo([
+      activeStreetRoute.origin.lat,
+      activeStreetRoute.origin.lng,
+    ]);
+  }, [activeStreetRoute, userPosition]);
+  const routeNeedsRefresh = Boolean(Number.isFinite(routeOriginDistanceMeters) && routeOriginDistanceMeters > 40);
+  const streetRouteSummary = useMemo(() => {
+    if (!activeStreetRoute) return null;
+    return {
+      distanceLabel: formatDistance(activeStreetRoute.distanceMeters),
+      durationLabel: formatDuration(activeStreetRoute.durationSeconds),
+      nextInstruction: activeStreetRoute.steps?.find((step) => step?.instruction)?.instruction || null,
+    };
+  }, [activeStreetRoute]);
+  const streetRouteMutation = useMutation(
+    trpc.map.streetRoute.mutationOptions({
+      onSuccess: (result, variables) => {
+        setRouteError("");
+        setStreetRoute({
+          ...result,
+          origin: {
+            lat: variables.origin.lat,
+            lng: variables.origin.lng,
+            timestamp: Date.now(),
+          },
+        });
+      },
+      onError: (error) => {
+        setRouteError(error?.message || "Could not find a street route for this pole.");
+      },
+    })
+  );
 
   const handleNavigateToPole = useCallback(
     (pole) => {
@@ -995,6 +1272,30 @@ export default function MapInner({
     },
     [decoratedPoles, onSelect]
   );
+  const handleFindRoute = useCallback(async () => {
+    if (!selectedPoleTarget) return;
+    if (!userPosition) {
+      setRouteError("Start live location first to find a street route.");
+      return;
+    }
+
+    setRouteError("");
+    try {
+      await streetRouteMutation.mutateAsync({
+        poleId: selectedPoleTarget.id,
+        origin: {
+          lat: userPosition.lat,
+          lng: userPosition.lng,
+        },
+      });
+    } catch {
+      // Error state is handled in the mutation callbacks.
+    }
+  }, [selectedPoleTarget, streetRouteMutation, userPosition]);
+  const handleClearRoute = useCallback(() => {
+    setStreetRoute(null);
+    setRouteError("");
+  }, []);
   const searchEntries = useMemo(() => buildSearchEntries(decoratedPoles), [decoratedPoles]);
   const rankedResults = useMemo(() => {
     const query = searchQuery.trim();
@@ -1032,6 +1333,17 @@ export default function MapInner({
   useEffect(() => {
     onPoleTypeCountsChange?.(poleTypeCounts);
   }, [poleTypeCounts, onPoleTypeCountsChange]);
+
+  useEffect(() => {
+    if (!selectedPoleId) {
+      setStreetRoute(null);
+      setRouteError("");
+      return;
+    }
+
+    setStreetRoute((current) => (current?.pole?.id === selectedPoleId ? current : null));
+    setRouteError("");
+  }, [selectedPoleId]);
 
   useEffect(() => {
     if (!rankedResults.length) {
@@ -1092,37 +1404,68 @@ export default function MapInner({
       return undefined;
     }
 
+    let cancelled = false;
     setLocationError("");
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
+    const seedBestEffortLocation = async () => {
+      try {
+        const cachedPosition = await getCurrentPositionAsync(cachedGeolocationOptions);
+        if (cancelled) return;
+        const nextPosition = toUserPosition(cachedPosition);
         setLocationPermission("granted");
         setLocationError("");
-        setUserPosition({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null,
-          speed: Number.isFinite(position.coords.speed) ? position.coords.speed : null,
-          timestamp: position.timestamp,
-        });
+        setUserPosition(nextPosition);
+        storeLastKnownLocation(nextPosition);
+        return;
+      } catch {
+        // Fall through to a rough network estimate.
+      }
+
+      if (cancelled || userPositionRef.current) return;
+
+      try {
+        const approximateLocation = await fetchApproximateLocation();
+        if (cancelled) return;
+        setUserPosition((current) => current ?? approximateLocation);
+        setLocationError("Showing an approximate network location until GPS becomes available.");
+        storeLastKnownLocation(approximateLocation);
+      } catch {
+        // Ignore and let the GPS watch continue trying.
+      }
+    };
+
+    seedBestEffortLocation();
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const nextPosition = toUserPosition(position);
+
+        setLocationPermission("granted");
+        setLocationError("");
+        setUserPosition(nextPosition);
+        storeLastKnownLocation(nextPosition);
       },
       (error) => {
-        setLocationError(getGeolocationErrorMessage(error));
+        const currentPosition = userPositionRef.current;
+        const hasKnownPosition = Boolean(
+          currentPosition && hasRenderableLatLng(currentPosition.lat, currentPosition.lng)
+        );
+        setLocationError(
+          error?.code === 3 && hasKnownPosition
+            ? "Showing your last known location while the browser keeps trying to refresh it."
+            : getGeolocationErrorMessage(error)
+        );
         if (error?.code === 1) {
           setLocationPermission("denied");
           setIsLocationTracking(false);
         }
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 10000,
-      }
+      geolocationOptions
     );
 
     geolocationWatchIdRef.current = watchId;
 
     return () => {
+      cancelled = true;
       navigator.geolocation.clearWatch(watchId);
       if (geolocationWatchIdRef.current === watchId) {
         geolocationWatchIdRef.current = null;
@@ -1192,23 +1535,26 @@ export default function MapInner({
           centerRequestToken={centerOnUserRequestToken}
         />
         <PolePopupPositionController selected={selected} onPositionChange={setPolePopupPosition} />
-        <MapLayers
+        <StaticMapLayers
           onSelect={onSelect}
           poles={decoratedPoles}
           equipment={equipment}
           segments={segments}
           poleTypeFilter={poleTypeFilter}
           selectedPoleId={selectedPoleId}
+        />
+        <DynamicMapLayers
           userPosition={userPosition}
           guidanceTarget={isLocationTracking ? selectedPoleTarget : null}
+          streetRoutePositions={streetRoutePositions}
         />
       </MapContainer>
       <div
         style={{
           position: "absolute",
-          top: "4.25rem",
-          right: "1rem",
-          width: "min(320px, calc(100% - 2rem))",
+          bottom: "3rem",
+          right: "0.75rem",
+          width: "min(220px, calc(100% - 1.5rem))",
           zIndex: 705,
         }}
       >
@@ -1216,9 +1562,15 @@ export default function MapInner({
           isTracking={isLocationTracking}
           permissionState={locationPermission}
           locationError={locationError}
+          routeError={routeError}
           userPosition={userPosition}
           selectedPole={selectedPoleTarget}
           guidanceMetrics={guidanceMetrics}
+          streetRoute={streetRouteSummary}
+          routeNeedsRefresh={routeNeedsRefresh}
+          onFindRoute={handleFindRoute}
+          onClearRoute={handleClearRoute}
+          isFindingRoute={streetRouteMutation.isPending}
           followUser={followUser}
           onStartTracking={handleStartLocationTracking}
           onStopTracking={handleStopLocationTracking}
@@ -1257,6 +1609,12 @@ export default function MapInner({
         position={polePopupPosition}
         onClose={() => onSelect?.(null)}
         onNavigateToPole={handleNavigateToPole}
+        onFindRoute={handleFindRoute}
+        onClearRoute={handleClearRoute}
+        hasStreetRoute={Boolean(streetRoutePositions)}
+        isFindingRoute={streetRouteMutation.isPending}
+        canFindRoute={Boolean(userPosition)}
+        routeError={routeError}
         portalRoot={popoverPortalRoot}
       />
     </div>

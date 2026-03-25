@@ -18,7 +18,7 @@ describe("fusion-planner", () => {
           fiberIndex: 2,
           direction: null,
           wavelength: null,
-          connectionType: "DARK",
+          connectionType: "FUSION",
           assignments: [
             { id: "green-1", deviceName: null, portName: null, status: "INCONSISTENT" },
           ],
@@ -64,7 +64,7 @@ describe("fusion-planner", () => {
           fiberIndex: 4,
           direction: null,
           wavelength: null,
-          connectionType: "DARK",
+          connectionType: "FUSION",
           endpointObservations: [
             {
               poleId: "pole-13",
@@ -112,5 +112,45 @@ describe("fusion-planner", () => {
 
     assert.strictEqual(fiber.operationalNeedFusion, true);
     assert.strictEqual(fiber.status, "INCONSISTENT");
+  });
+
+  it("does not create fusion tasks for DARK rows even with assignment metadata", () => {
+    const pole = { id: "pole-13", poleNumber: "MWC23020013" };
+    const endpoint = { role: "END" };
+    const [fiber] = annotateFibersForPole({
+      pole,
+      endpoint,
+      fiberRecords: [
+        {
+          id: "fiber-dark-assigned",
+          bufferColor: "BLUE",
+          fiberColor: "BLACK",
+          bufferIndex: 0,
+          fiberIndex: 7,
+          direction: null,
+          wavelength: null,
+          connectionType: "DARK",
+          endpointObservations: [
+            {
+              poleId: "pole-13",
+              role: "END",
+              connectionType: "DARK",
+              rawConnection: "<- CONTINUOUS ->",
+              wavelength: null,
+              deviceName: "MWC23020013",
+              portName: "PORT9",
+              state: "NEEDS_FUSION",
+            },
+          ],
+          assignments: [
+            { id: "assignment-dark", deviceName: "MWC23020013", portName: "PORT9", status: "INCONSISTENT" },
+          ],
+        },
+      ],
+    });
+
+    assert.strictEqual(fiber.connectionType, "DARK");
+    assert.strictEqual(fiber.operationalNeedFusion, false);
+    assert.strictEqual(fiber.status, "DARK");
   });
 });

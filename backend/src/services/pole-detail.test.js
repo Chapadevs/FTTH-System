@@ -81,17 +81,17 @@ describe("pole-detail", () => {
     assert.strictEqual(detail.summary.fiberRecordCount, 2);
     assert.strictEqual(detail.summary.sheathCount, 1);
     assert.strictEqual(detail.summary.activeCount, 1);
-    assert.strictEqual(detail.summary.darkCount, 0);
-    assert.strictEqual(detail.summary.needFusionOperationalCount, 1);
-    assert.strictEqual(detail.summary.inconsistentCount, 1);
+    assert.strictEqual(detail.summary.darkCount, 1);
+    assert.strictEqual(detail.summary.needFusionOperationalCount, 0);
+    assert.strictEqual(detail.summary.inconsistentCount, 0);
     assert.strictEqual(detail.summary.inconsistencyCount, 1);
     assert.strictEqual(detail.summary.equipmentCount, 1);
     assert.strictEqual(detail.connectedPoles.length, 1);
     assert.strictEqual(detail.sheaths[0].connectedPoleNumbers[0], "MWC23T137");
-    assert.strictEqual(detail.sheaths[0].actions.length, 1);
-    assert.strictEqual(detail.work.status, "NEEDS_WORK");
-    assert.strictEqual(detail.work.taskCount, 1);
-    assert.match(detail.work.nextAction, /Fuse GREEN fiber in BLUE tube/i);
+    assert.strictEqual(detail.sheaths[0].actions.length, 0);
+    assert.strictEqual(detail.work.status, "CONNECTED");
+    assert.strictEqual(detail.work.taskCount, 0);
+    assert.strictEqual(detail.work.nextAction, null);
   });
 
   it("counts only tail-assigned fusion work for operational tasks", () => {
@@ -182,5 +182,66 @@ describe("pole-detail", () => {
     assert.strictEqual(detail.summary.inconsistencyCount, 7);
     assert.strictEqual(detail.work.taskCount, 1);
     assert.match(detail.work.nextAction, /SLATE fiber in BLUE tube/i);
+  });
+
+  it("keeps rose/pink fusion tasks when imported rows use the PI code", () => {
+    const makePendingFusion = (id, bufferColor, bufferIndex, fiberColor, fiberIndex, portName) => ({
+      id,
+      bufferColor,
+      fiberColor,
+      bufferIndex,
+      fiberIndex,
+      direction: null,
+      wavelength: null,
+      connectionType: "FUSION",
+      assignments: [
+        {
+          id: `${id}-assignment`,
+          deviceName: "2302E_FT_068",
+          portName,
+          status: "INCONSISTENT",
+          equipment: null,
+        },
+      ],
+    });
+
+    const detail = buildPoleDetail({
+      id: "pole-68",
+      poleNumber: "2302E_FT_068",
+      streetName: null,
+      status: "ACTIVE",
+      lat: 39.45,
+      lng: -82.05,
+      projectId: "project-1",
+      equipment: [],
+      segmentsFrom: [],
+      segmentsTo: [],
+      sheathEndpoints: [
+        {
+          role: "END",
+          sheath: {
+            id: "sheath-68",
+            name: "48CT 2302E_SE_006 TO 2302E_FT_068",
+            endpoints: [
+              { poleId: "pole-upstream", pole: { id: "pole-upstream", poleNumber: "2302E_SE_006" } },
+              { poleId: "pole-68", pole: { id: "pole-68", poleNumber: "2302E_FT_068" } },
+            ],
+            fiberRecords: [
+              makePendingFusion("fiber-blue-rose", "BLUE", 0, "PINK", 10, "PORT1"),
+              makePendingFusion("fiber-blue-aqua", "BLUE", 0, "AQUA", 11, "PORT2"),
+              makePendingFusion("fiber-orange-blue", "ORANGE", 1, "BLUE", 0, "PORT3"),
+            ],
+          },
+        },
+      ],
+    });
+
+    assert.strictEqual(detail.summary.fiberRecordCount, 3);
+    assert.strictEqual(detail.summary.needFusionOperationalCount, 3);
+    assert.strictEqual(detail.summary.actionCount, 3);
+    assert.strictEqual(detail.work.taskCount, 3);
+    assert.ok(detail.sheaths[0].actions.some((action) => /ROSE fiber in BLUE tube/i.test(action)));
+    assert.ok(detail.sheaths[0].actions.some((action) => /AQUA fiber in BLUE tube/i.test(action)));
+    assert.ok(detail.sheaths[0].actions.some((action) => /BLUE fiber in ORANGE tube/i.test(action)));
   });
 });
