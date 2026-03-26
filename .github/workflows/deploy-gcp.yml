@@ -78,6 +78,20 @@ jobs:
               npx prisma migrate deploy
           fi
 
+      - name: Build Cloud Run DATABASE_URL
+        id: runtime_db
+        run: |
+          SRC="${{ secrets.DATABASE_URL }}"
+          CONN="${{ secrets.CLOUDSQL_CONNECTION_NAME }}"
+          if [ -n "$CONN" ]; then
+            CREDS=$(echo "$SRC" | sed -E 's#postgresql://([^@]+)@.*#\1#')
+            DBNAME=$(echo "$SRC" | sed -E 's#.*:[0-9]+/([^?]+).*#\1#')
+            RUNTIME_URL="postgresql://${CREDS}@localhost/${DBNAME}?host=/cloudsql/${CONN}"
+            echo "url=$RUNTIME_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=$SRC" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy backend to Cloud Run
         run: |
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
@@ -91,7 +105,7 @@ jobs:
               --allow-unauthenticated \
               --port 8080 \
               --add-cloudsql-instances="${{ secrets.CLOUDSQL_CONNECTION_NAME }}" \
-              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
+              --set-env-vars "DATABASE_URL=${{ steps.runtime_db.outputs.url }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
           else
             gcloud run deploy "${{ env.BACKEND_SERVICE }}" \
               --image "$IMAGE" \
