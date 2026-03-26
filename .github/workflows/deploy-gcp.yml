@@ -11,6 +11,7 @@ env:
   AR_REPO: ftth-system
   BACKEND_SERVICE: ftth-backend
   FRONTEND_SERVICE: ftth-frontend
+  BACKEND_RUNTIME_SA: github-actions-sa@chapadevs-468722.iam.gserviceaccount.com
 
 jobs:
   deploy:
@@ -102,6 +103,7 @@ jobs:
               --region "${{ env.GCP_REGION }}" \
               --project "$PROJECT_ID" \
               --platform managed \
+              --service-account "${{ env.BACKEND_RUNTIME_SA }}" \
               --allow-unauthenticated \
               --port 8080 \
               --add-cloudsql-instances="${{ secrets.CLOUDSQL_CONNECTION_NAME }}" \
@@ -112,6 +114,7 @@ jobs:
               --region "${{ env.GCP_REGION }}" \
               --project "$PROJECT_ID" \
               --platform managed \
+              --service-account "${{ env.BACKEND_RUNTIME_SA }}" \
               --allow-unauthenticated \
               --port 8080 \
               --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
