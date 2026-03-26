@@ -129,9 +129,21 @@ export function ImportDialog({ open, onClose, onImported }) {
       setStep(2);
     } catch (err) {
       console.error(err);
-      const msg = (err?.message || "").toLowerCase();
-      const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-      alert(isConn ? "Start the backend. From project root run: npm run dev" : "Process failed: " + (err?.message || "Unknown error"));
+      const raw = err?.message || "Unknown error";
+      const msg = raw.toLowerCase();
+      const looksNetwork =
+        msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+      if (looksNetwork) {
+        alert(
+          "Upload failed in the browser (often CORS on the GCS bucket after a signed URL, or wrong API URL).\n\n" +
+            "Fixes: (1) Ensure gs://fiberops-imports has CORS allowing PUT from your frontend origin. " +
+            "(2) Set localStorage key fiberops-user-email to admin@fiberops.com if the API returns 401. " +
+            "(3) Local dev: run npm run dev from the project root.\n\n" +
+            `Details: ${raw}`
+        );
+      } else {
+        alert("Process failed: " + raw);
+      }
     } finally {
       setUploadBusy(false);
     }
@@ -161,9 +173,19 @@ export function ImportDialog({ open, onClose, onImported }) {
       resetAndClose();
     } catch (err) {
       console.error(err);
-      const msg = (err?.message || "").toLowerCase();
-      const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-      alert(isConn ? "Start the backend. From project root run: npm run dev" : "Import failed: " + (err?.message || "Unknown error"));
+      const raw = err?.message || "Unknown error";
+      const msg = raw.toLowerCase();
+      const looksNetwork =
+        msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+      if (looksNetwork) {
+        alert(
+          "Request failed in the browser (network/CORS or wrong API URL). " +
+            "For imports, check GCS bucket CORS and localStorage fiberops-user-email. Local dev: npm run dev.\n\n" +
+            `Details: ${raw}`
+        );
+      } else {
+        alert("Import failed: " + raw);
+      }
     }
   };
 

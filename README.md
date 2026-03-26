@@ -59,6 +59,7 @@ OneDrive on the Desktop folder often locks files; exclude `node_modules` and `ba
    - Roles: `Artifact Registry Writer`, `Cloud Run Admin`, `Service Account User`, **`Cloud SQL Client`** (required for the Auth Proxy + connector)
    - Cloud Run **runtime** service account also needs **`Cloud SQL Client`** if the app connects via the Cloud SQL socket (see Cloud Run service settings).
 5. **JSON key**: Create key for that service account → entire JSON → GitHub secret `GCP_SA_KEY`.
+6. **GCS CORS (imports)**: Browser uploads use a signed URL `PUT` to the imports bucket. If the UI shows a generic “failed to fetch” on import, configure CORS on `gs://<GCS_BUCKET_IMPORTS>` (see `gcs-cors-imports.json` in the repo for an example you can apply with `gcloud storage buckets update gs://BUCKET --cors-file=...`).
 
 ### GitHub Actions (simple: JSON key only)
 

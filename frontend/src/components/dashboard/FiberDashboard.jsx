@@ -74,17 +74,29 @@ export function FiberDashboard({ fiberResult, onFiberResult, completedVisits = n
           },
           onError: (err) => {
             console.error(err);
-            const msg = (err?.message || "").toLowerCase();
-            const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-            alert(isConn ? "Start the backend. From project root run: npm run dev" : "Upload failed: " + (err?.message || "Unknown error"));
+            const raw = err?.message || "Unknown error";
+            const msg = raw.toLowerCase();
+            const looksNetwork =
+              msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+            alert(
+              looksNetwork
+                ? `Browser network/CORS or API URL issue. Check GCS CORS, VITE_API_URL, or localStorage fiberops-user-email. Local dev: npm run dev.\n\n${raw}`
+                : "Upload failed: " + raw
+            );
           },
         }
       );
     } catch (err) {
       console.error(err);
-      const msg = (err?.message || "").toLowerCase();
-      const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-      alert(isConn ? "Start the backend. From project root run: npm run dev" : "Upload failed: " + (err?.message || "Unknown error"));
+      const raw = err?.message || "Unknown error";
+      const msg = raw.toLowerCase();
+      const looksNetwork =
+        msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+      alert(
+        looksNetwork
+          ? `Browser network/CORS or API URL issue. Check GCS CORS, VITE_API_URL, or localStorage fiberops-user-email. Local dev: npm run dev.\n\n${raw}`
+          : "Upload failed: " + raw
+      );
     } finally {
       setUploading(false);
     }
