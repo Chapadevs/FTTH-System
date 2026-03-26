@@ -54,10 +54,10 @@ OneDrive on the Desktop folder often locks files; exclude `node_modules` and `ba
 
 1. **APIs**: Enable Cloud Run, Artifact Registry, Cloud SQL Admin, Secret Manager (optional).
 2. **Artifact Registry**: Create Docker repository named `ftth-system` (or change `AR_REPO` in `.github/workflows/deploy-gcp.yml`).
-3. **Cloud SQL**: PostgreSQL 16, database `fiberops`, user/password. For GitHub Actions migrations you need a **TCP** reachable URL in `DATABASE_URL` (e.g. public IP + authorized network, or run migrations yourself from a machine with Cloud SQL Auth Proxy).
+3. **Cloud SQL**: PostgreSQL, database `fiberops`, user/password. Set `CLOUDSQL_CONNECTION_NAME` to `project:region:instance`. The workflow runs **Cloud SQL Auth Proxy** during `prisma migrate deploy`, so you do **not** need to whitelist GitHub runner IPs on the instance public IP. Your `DATABASE_URL` secret should still use the **same user, password, database name, and port** as production (the workflow rewrites the host to `127.0.0.1` only for that migrate step).
 4. **Service account** (for GitHub):
-   - Roles: `Artifact Registry Writer`, `Cloud Run Admin`, `Service Account User`
-   - If using Cloud SQL connector on Run: `Cloud SQL Client` on the **runtime** service account (see Cloud Run service settings).
+   - Roles: `Artifact Registry Writer`, `Cloud Run Admin`, `Service Account User`, **`Cloud SQL Client`** (required for the Auth Proxy + connector)
+   - Cloud Run **runtime** service account also needs **`Cloud SQL Client`** if the app connects via the Cloud SQL socket (see Cloud Run service settings).
 5. **JSON key**: Create key for that service account → entire JSON → GitHub secret `GCP_SA_KEY`.
 
 ### GitHub Actions (simple: JSON key only)
@@ -71,7 +71,7 @@ Workflow: `.github/workflows/deploy-gcp.yml` (runs on push to `main`).
 | `DATABASE_URL` | Yes | Postgres URL (TCP for CI migrations, e.g. `postgresql://USER:PASS@HOST:5432/fiberops`) |
 | `GCS_BUCKET_IMPORTS` | Yes | Bucket name |
 | `GCS_BUCKET_PHOTOS` | Yes | Bucket name |
-| `CLOUDSQL_CONNECTION_NAME` | No | `project:region:instance` — if set, backend Cloud Run gets `--add-cloudsql-instances` |
+| `CLOUDSQL_CONNECTION_NAME` | Strongly recommended | `project:region:instance` — enables Cloud SQL Auth Proxy in Actions for migrations and adds `--add-cloudsql-instances` on backend deploy |
 
 Edit workflow `env` if you want different region, service names, or Artifact Registry repo name.
 
