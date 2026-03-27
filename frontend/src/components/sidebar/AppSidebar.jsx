@@ -53,7 +53,7 @@ export function AppSidebar({ isCollapsed, isMobile, onToggle, onNavigate }) {
             position: "fixed",
             inset: 0,
             background: "rgba(0,0,0,0.4)",
-            zIndex: 40,
+            zIndex: 800,
             transition: "opacity 0.2s ease",
           }}
         />
@@ -72,7 +72,7 @@ export function AppSidebar({ isCollapsed, isMobile, onToggle, onNavigate }) {
           padding: "1rem",
           background: "#f8fafc",
           transition: "width 0.2s ease, transform 0.25s ease",
-          zIndex: 50,
+          zIndex: 850,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
