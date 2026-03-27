@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
-import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Polyline, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import "react-leaflet-markercluster/styles";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -556,18 +556,6 @@ function MapSearchCard({
 
       <div style={{ ...overlayCardStyle, padding: "0.6rem 0.7rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: "0.62rem",
-              fontWeight: 800,
-              color: "#64748b",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            Search
-          </span>
           <input
             type="text"
             value={searchQuery}
@@ -870,126 +858,51 @@ function LocationGuidanceCard({
   const shouldShowMetrics = Boolean(guidanceMetrics || hasStreetRoute || locationError || routeError || permissionState === "denied" || permissionState === "unsupported");
 
   return (
-    <div style={{ ...overlayCardStyle, padding: "0.45rem 0.5rem", display: "grid", gap: "0.35rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-        <div>
-          <div style={{ fontSize: "0.56rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Guide
-          </div>
-          {hasPoleTarget && (
-            <div style={{ marginTop: "0.08rem", fontSize: "0.78rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
-              {selectedPole.poleNumber || "Selected pole"}
-            </div>
-          )}
-        </div>
+    <div style={{ ...overlayCardStyle, padding: "0.35rem 0.45rem", display: "grid", gap: "0.3rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
         <div
           style={{
-            padding: "0.18rem 0.42rem",
+            padding: "0.12rem 0.35rem",
             borderRadius: "999px",
-            fontSize: "0.62rem",
+            fontSize: "0.58rem",
             fontWeight: 800,
             color: isTracking ? "#166534" : "#475569",
-            background: isTracking ? "#dcfce7" : "#f8fafc",
+            background: isTracking ? "#dcfce7" : "#f1f5f9",
             border: `1px solid ${isTracking ? "#86efac" : "#e2e8f0"}`,
             whiteSpace: "nowrap",
           }}
         >
-          {isTracking ? "Tracking on" : "Tracking off"}
+          {isTracking ? "GPS ON" : "GPS OFF"}
         </div>
+
+        {hasPoleTarget && (
+          <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#0f172a", whiteSpace: "nowrap" }}>
+            {selectedPole.poleNumber || "Pole"}
+          </span>
+        )}
+
+        {guidanceMetrics && (
+          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#334155", whiteSpace: "nowrap", marginLeft: "auto" }}>
+            {guidanceMetrics.distanceLabel} · {guidanceMetrics.bearingLabel}
+          </span>
+        )}
+
+        {hasStreetRoute && streetRoute.durationLabel && (
+          <span style={{ fontSize: "0.66rem", color: "#475569", whiteSpace: "nowrap" }}>
+            ~{streetRoute.durationLabel}
+          </span>
+        )}
       </div>
 
-      {shouldShowMetrics && (
-        <div
-          style={{
-            display: "grid",
-            gap: "0.24rem",
-            padding: "0.42rem 0.48rem",
-            borderRadius: "10px",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-        {guidanceMetrics ? (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-              <span style={{ fontSize: "0.68rem", color: "#475569" }}>Distance</span>
-              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
-                {guidanceMetrics.distanceLabel}
-              </span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-              <span style={{ fontSize: "0.68rem", color: "#475569" }}>Direction</span>
-              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
-                {guidanceMetrics.bearingLabel} ({Math.round(guidanceMetrics.bearingDegrees)}deg)
-              </span>
-            </div>
-            {hasStreetRoute && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-                  <span style={{ fontSize: "0.68rem", color: "#475569" }}>Street route</span>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
-                    {streetRoute.distanceLabel || "—"}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-                  <span style={{ fontSize: "0.68rem", color: "#475569" }}>ETA</span>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#0f172a" }}>
-                    {streetRoute.durationLabel || "—"}
-                  </span>
-                </div>
-                {streetRoute.nextInstruction && (
-                  <div style={{ marginTop: "0.12rem", fontSize: "0.68rem", color: "#1e293b", lineHeight: 1.35 }}>
-                    Next: {streetRoute.nextInstruction}
-                  </div>
-                )}
-                {routeNeedsRefresh && (
-                  <div style={{ fontSize: "0.66rem", color: "#92400e", lineHeight: 1.35 }}>
-                    Your live position moved since the last route. Recalculate for the latest streets.
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        ) : null}
-        {hasLocation && Number.isFinite(userPosition.accuracy) && (
-          <div style={{ fontSize: "0.64rem", color: "#64748b" }}>
-            Accuracy: about {Math.round(userPosition.accuracy)} m
-          </div>
-        )}
-        {permissionState === "denied" && (
-          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
-            Browser location permission is currently denied.
-          </div>
-        )}
-        {permissionState === "unsupported" && (
-          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
-            This browser does not support geolocation.
-          </div>
-        )}
-        {locationError && (
-          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
-            {locationError}
-          </div>
-        )}
-        {routeError && (
-          <div style={{ fontSize: "0.66rem", color: "#b91c1c", lineHeight: 1.35 }}>
-            {routeError}
-          </div>
-        )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.28rem" }}>
+      <div style={{ display: "flex", gap: "0.2rem" }}>
         {isTracking ? (
-          <button type="button" onClick={onStopTracking} style={gpsButtonStyle}>
-            GPS
-          </button>
+          <button type="button" onClick={onStopTracking} style={gpsButtonStyle}>GPS</button>
         ) : (
           <button
             type="button"
             onClick={onStartTracking}
             disabled={permissionState === "unsupported"}
-            style={permissionState === "unsupported" ? { ...mutedButtonStyle, minWidth: "2.1rem", padding: "0.32rem 0.45rem" } : gpsButtonStyle}
+            style={permissionState === "unsupported" ? { ...mutedButtonStyle, minWidth: "2.1rem", padding: "0.28rem 0.4rem" } : gpsButtonStyle}
           >
             GPS
           </button>
@@ -1017,11 +930,17 @@ function LocationGuidanceCard({
           {followUser ? "Following" : "Follow"}
         </button>
         {hasStreetRoute && (
-          <button type="button" onClick={onClearRoute} style={actionButtonStyle}>
-            Clear
-          </button>
+          <button type="button" onClick={onClearRoute} style={actionButtonStyle}>Clear</button>
         )}
       </div>
+
+      {(locationError || routeError || permissionState === "denied" || permissionState === "unsupported") && (
+        <div style={{ fontSize: "0.62rem", color: "#b91c1c", lineHeight: 1.3 }}>
+          {permissionState === "denied" && "Location permission denied. "}
+          {permissionState === "unsupported" && "Geolocation unsupported. "}
+          {locationError} {routeError}
+        </div>
+      )}
     </div>
   );
 }
@@ -1329,8 +1248,20 @@ export default function MapInner({
     }
     return acc;
   }, [decoratedPoles]);
+  const lastReportedPoleTypeCountsRef = useRef(null);
 
   useEffect(() => {
+    const lastReported = lastReportedPoleTypeCountsRef.current;
+    if (
+      lastReported
+      && lastReported.ote === poleTypeCounts.ote
+      && lastReported.distribution === poleTypeCounts.distribution
+      && lastReported.splitter === poleTypeCounts.splitter
+      && lastReported.total === poleTypeCounts.total
+    ) {
+      return;
+    }
+    lastReportedPoleTypeCountsRef.current = poleTypeCounts;
     onPoleTypeCountsChange?.(poleTypeCounts);
   }, [poleTypeCounts, onPoleTypeCountsChange]);
 
@@ -1517,7 +1448,9 @@ export default function MapInner({
         zoom={defaultZoom}
         style={{ height: "100%", width: "100%" }}
         scrollWheelZoom
+        zoomControl={false}
       >
+        <ZoomControl position="bottomleft" />
         <MapResizeController />
         <MapInitialFitController
           poles={decoratedPoles}
@@ -1552,9 +1485,9 @@ export default function MapInner({
       <div
         style={{
           position: "absolute",
-          bottom: "3rem",
-          right: "0.75rem",
-          width: "min(220px, calc(100% - 1.5rem))",
+          top: "0.5rem",
+          right: "0.5rem",
+          width: "min(320px, calc(100% - 1.5rem))",
           zIndex: 705,
         }}
       >
