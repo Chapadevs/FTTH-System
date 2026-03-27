@@ -1,15 +1,52 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAuthToken, setAuthToken } from "../lib/auth.js";
 
 export function LoginPage() {
-  const [email, setEmail] = useState("admin@fiberops.com");
+  const [username, setUsername] = useState("paudeinox");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (getAuthToken()) {
+      navigate("/map", { replace: true });
+    }
+  }, [navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (email.trim()) {
-      localStorage.setItem("fiberops-user-email", email.trim());
-      navigate("/map");
+    if (!username.trim() || !password) {
+      setError("Username and password are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "" : "http://localhost:3000");
+      const response = await fetch(`${apiBase}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: username.trim(),
+          password,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.token) {
+        throw new Error(data.error || "Login failed.");
+      }
+
+      setAuthToken(data.token);
+      navigate("/map", { replace: true });
+    } catch (err) {
+      setError(err?.message || "Login failed.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -36,7 +73,7 @@ export function LoginPage() {
           FiberOps
         </h1>
         <p style={{ color: "#64748b", marginBottom: "1rem", fontSize: "0.875rem" }}>
-          Internal profile selector (Phase 1 — no auth)
+          Sign in with the production admin account.
         </p>
         <form onSubmit={handleSubmit}>
           <label
@@ -47,12 +84,12 @@ export function LoginPage() {
               fontWeight: 500,
             }}
           >
-            Email
+            Username
           </label>
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             style={{
               width: "100%",
               padding: "0.5rem 0.75rem",
@@ -60,9 +97,39 @@ export function LoginPage() {
               borderRadius: "6px",
               marginBottom: "1rem",
             }}
+            autoComplete="username"
           />
+          <label
+            style={{
+              display: "block",
+              marginBottom: "0.5rem",
+              fontSize: "0.875rem",
+              fontWeight: 500,
+            }}
+          >
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              border: "1px solid #e2e8f0",
+              borderRadius: "6px",
+              marginBottom: "1rem",
+            }}
+            autoComplete="current-password"
+          />
+          {error ? (
+            <p style={{ margin: "0 0 1rem 0", color: "#b91c1c", fontSize: "0.875rem" }}>
+              {error}
+            </p>
+          ) : null}
           <button
             type="submit"
+            disabled={submitting}
             style={{
               width: "100%",
               padding: "0.5rem 1rem",
@@ -74,7 +141,7 @@ export function LoginPage() {
               fontWeight: 500,
             }}
           >
-            Continue
+            {submitting ? "Signing in..." : "Sign In"}
           </button>
         </form>
       </div>

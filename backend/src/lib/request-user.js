@@ -1,18 +1,15 @@
 import { prisma } from "./prisma.js";
-
-const ADMIN_EMAIL = "admin@fiberops.com";
+import { verifyBearerToken } from "./auth-tokens.js";
+import { publicUserSelect } from "./public-user.js";
 
 export async function getRequestUser(req) {
-  const email = req.headers["x-user-email"];
-  if (email && typeof email === "string") {
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-    if (user) return user;
+  const userId = await verifyBearerToken(req);
+  if (!userId) {
+    return null;
   }
-  const admin = await prisma.user.findUnique({
-    where: { email: ADMIN_EMAIL },
+
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: publicUserSelect,
   });
-  if (admin) return admin;
-  return prisma.user.findFirst();
 }

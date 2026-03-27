@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { trpc } from "../../lib/trpc.js";
+import { getAuthToken } from "../../lib/auth.js";
 
 function buildDefaultsFromFile(fileName) {
   const baseName = (fileName || "Imported Project").replace(/\.[^.]+$/, "").trim();
@@ -98,12 +99,12 @@ export function ImportDialog({ open, onClose, onImported }) {
       let nextFilePath;
       if (localImportQuery.data === true) {
         const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "" : "http://localhost:3000");
-        const email = localStorage.getItem("fiberops-user-email");
+        const token = getAuthToken();
         const fd = new FormData();
         fd.append("file", file);
         const res = await fetch(`${apiBase}/api/uploads/local-import`, {
           method: "POST",
-          headers: email ? { "x-user-email": email } : {},
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: fd,
         });
         const data = await res.json().catch(() => ({}));
@@ -129,9 +130,21 @@ export function ImportDialog({ open, onClose, onImported }) {
       setStep(2);
     } catch (err) {
       console.error(err);
-      const msg = (err?.message || "").toLowerCase();
-      const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-      alert(isConn ? "Start the backend. From project root run: npm run dev" : "Process failed: " + (err?.message || "Unknown error"));
+      const raw = err?.message || "Unknown error";
+      const msg = raw.toLowerCase();
+      const looksNetwork =
+        msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+      if (looksNetwork) {
+        alert(
+          "Upload failed in the browser (often CORS on the GCS bucket after a signed URL, or wrong API URL).\n\n" +
+            "Fixes: (1) Ensure gs://fiberops-imports has CORS allowing PUT from your frontend origin. " +
+            "(2) Sign in again if the API returns 401. " +
+            "(3) Local dev: run npm run dev from the project root.\n\n" +
+            `Details: ${raw}`
+        );
+      } else {
+        alert("Process failed: " + raw);
+      }
     } finally {
       setUploadBusy(false);
     }
@@ -161,9 +174,19 @@ export function ImportDialog({ open, onClose, onImported }) {
       resetAndClose();
     } catch (err) {
       console.error(err);
-      const msg = (err?.message || "").toLowerCase();
-      const isConn = msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
-      alert(isConn ? "Start the backend. From project root run: npm run dev" : "Import failed: " + (err?.message || "Unknown error"));
+      const raw = err?.message || "Unknown error";
+      const msg = raw.toLowerCase();
+      const looksNetwork =
+        msg.includes("failed to fetch") || msg.includes("connection refused") || msg.includes("network");
+      if (looksNetwork) {
+        alert(
+          "Request failed in the browser (network/CORS or wrong API URL). " +
+            "For imports, check GCS bucket CORS and your signed-in session. Local dev: npm run dev.\n\n" +
+            `Details: ${raw}`
+        );
+      } else {
+        alert("Import failed: " + raw);
+      }
     }
   };
 

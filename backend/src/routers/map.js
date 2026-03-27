@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc.js";
+import { router, protectedProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
 import { hasRenderableCoordinates } from "../lib/geo.js";
 import { buildPoleDetail } from "../services/pole-detail.js";
 import { getStreetRoute } from "../services/street-routing.js";
 
 export const mapRouter = router({
-  getData: publicProcedure
+  getData: protectedProcedure
     .input(
       z
         .object({ projectIds: z.array(z.string()).optional() })
@@ -93,7 +93,7 @@ export const mapRouter = router({
         ),
       };
     }),
-  streetRoute: publicProcedure
+  streetRoute: protectedProcedure
     .input(
       z.object({
         poleId: z.string().min(1),

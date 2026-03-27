@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc.js";
+import { router, protectedProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
 import { buildPoleDetail } from "../services/pole-detail.js";
 import { ensurePoleStreetName } from "../services/reverse-geocode.js";
 
 export const polesRouter = router({
-  byProject: publicProcedure
+  byProject: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       return prisma.pole.findMany({
@@ -14,7 +14,7 @@ export const polesRouter = router({
       });
     }),
 
-  getDetail: publicProcedure
+  getDetail: protectedProcedure
     .input(z.object({ poleId: z.string() }))
     .query(async ({ input }) => {
       const pole = await prisma.pole.findUnique({

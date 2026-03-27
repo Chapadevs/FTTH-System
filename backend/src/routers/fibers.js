@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, publicProcedure } from "../trpc.js";
+import { router, protectedProcedure } from "../trpc.js";
 import {
   parseFiberRows,
   computeAssignmentSummary,
@@ -10,9 +10,9 @@ import { extractFiberRowsFromExcel } from "../services/excel-parser.js";
 import { downloadImportBuffer } from "../services/import-buffer-loader.js";
 
 export const fibersRouter = router({
-  getColorSequence: publicProcedure.query(() => getFiberColorSequence()),
+  getColorSequence: protectedProcedure.query(() => getFiberColorSequence()),
 
-  computeAssignment: publicProcedure
+  computeAssignment: protectedProcedure
     .input(
       z.object({
         rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
@@ -39,7 +39,7 @@ export const fibersRouter = router({
       };
     }),
 
-  computeFromExcel: publicProcedure
+  computeFromExcel: protectedProcedure
     .input(z.object({ filePath: z.string() }))
     .mutation(async ({ input }) => {
       const buffer = await downloadImportBuffer(input.filePath);

@@ -12,6 +12,8 @@ generator client {
 model User {
   id          String    @id @default(cuid())
   firebaseUid String    @unique
+  username    String?   @unique
+  passwordHash String?
   email       String    @unique
   name        String
   role        Role      @default(FIELD_TECH)

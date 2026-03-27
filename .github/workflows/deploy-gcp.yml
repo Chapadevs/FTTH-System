@@ -11,6 +11,7 @@ env:
   AR_REPO: ftth-system
   BACKEND_SERVICE: ftth-backend
   FRONTEND_SERVICE: ftth-frontend
+  BACKEND_RUNTIME_SA: github-actions-sa@chapadevs-468722.iam.gserviceaccount.com
 
 jobs:
   deploy:
@@ -38,12 +39,59 @@ jobs:
           docker push "$IMAGE"
           echo "BACKEND_IMAGE=$IMAGE" >> $GITHUB_ENV
 
+      # GitHub runner IPs are not in Cloud SQL authorized networks. Use Cloud SQL Auth
+      # Proxy + DATABASE_URL pointed at 127.0.0.1 so Prisma can reach the instance.
+      # Requires secrets.CLOUDSQL_CONNECTION_NAME and deploy SA with roles/cloudsql.client.
       - name: Prisma migrate deploy
         run: |
-          docker run --rm \
-            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            "${{ env.BACKEND_IMAGE }}" \
-            npx prisma migrate deploy
+          set -euo pipefail
+          SRC_URL="${{ secrets.DATABASE_URL }}"
+          if [ -n "${{ secrets.CLOUDSQL_CONNECTION_NAME }}" ]; then
+            curl -fsSL -o cloud-sql-proxy \
+              https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
+            chmod +x cloud-sql-proxy
+            ./cloud-sql-proxy "${{ secrets.CLOUDSQL_CONNECTION_NAME }}" --address 127.0.0.1 --port 5432 &
+            PROXY_PID=$!
+            trap 'kill "$PROXY_PID" 2>/dev/null || true' EXIT
+            for i in $(seq 1 45); do
+              nc -z 127.0.0.1 5432 && break
+              if [ "$i" -eq 45 ]; then
+                echo "Cloud SQL proxy did not become ready on 127.0.0.1:5432"
+                exit 1
+              fi
+              sleep 1
+            done
+            MIGRATE_URL=$(echo "$SRC_URL" | sed -E 's#(postgresql://[^@]+@)[^/]+#\1127.0.0.1:5432#')
+            MIGRATE_URL=$(echo "$MIGRATE_URL" | sed -E 's/([?&])sslmode=[^&]*//g' | sed 's/\?&/?/' | sed 's/&$//' | sed 's/\?$//')
+            if echo "$MIGRATE_URL" | grep -q '\?'; then
+              MIGRATE_URL="${MIGRATE_URL}&sslmode=disable"
+            else
+              MIGRATE_URL="${MIGRATE_URL}?sslmode=disable"
+            fi
+            docker run --rm --network host \
+              -e DATABASE_URL="$MIGRATE_URL" \
+              "${{ env.BACKEND_IMAGE }}" \
+              npx prisma migrate deploy
+          else
+            docker run --rm \
+              -e DATABASE_URL="$SRC_URL" \
+              "${{ env.BACKEND_IMAGE }}" \
+              npx prisma migrate deploy
+          fi
+
+      - name: Build Cloud Run DATABASE_URL
+        id: runtime_db
+        run: |
+          SRC="${{ secrets.DATABASE_URL }}"
+          CONN="${{ secrets.CLOUDSQL_CONNECTION_NAME }}"
+          if [ -n "$CONN" ]; then
+            CREDS=$(echo "$SRC" | sed -E 's#postgresql://([^@]+)@.*#\1#')
+            DBNAME=$(echo "$SRC" | sed -E 's#.*:[0-9]+/([^?]+).*#\1#')
+            RUNTIME_URL="postgresql://${CREDS}@localhost/${DBNAME}?host=/cloudsql/${CONN}"
+            echo "url=$RUNTIME_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=$SRC" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Deploy backend to Cloud Run
         run: |
@@ -55,19 +103,21 @@ jobs:
               --region "${{ env.GCP_REGION }}" \
               --project "$PROJECT_ID" \
               --platform managed \
+              --service-account "${{ env.BACKEND_RUNTIME_SA }}" \
               --allow-unauthenticated \
               --port 8080 \
               --add-cloudsql-instances="${{ secrets.CLOUDSQL_CONNECTION_NAME }}" \
-              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
+              --set-env-vars "DATABASE_URL=${{ steps.runtime_db.outputs.url }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }},JWT_SECRET=${{ secrets.JWT_SECRET }},JWT_EXPIRES_IN=7d"
           else
             gcloud run deploy "${{ env.BACKEND_SERVICE }}" \
               --image "$IMAGE" \
               --region "${{ env.GCP_REGION }}" \
               --project "$PROJECT_ID" \
               --platform managed \
+              --service-account "${{ env.BACKEND_RUNTIME_SA }}" \
               --allow-unauthenticated \
               --port 8080 \
-              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
+              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }},JWT_SECRET=${{ secrets.JWT_SECRET }},JWT_EXPIRES_IN=7d"
           fi
 
       - name: Backend URL

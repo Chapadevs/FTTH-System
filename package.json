@@ -9,6 +9,7 @@
     "db:migrate": "npm run migrate -w backend",
     "db:migrate:dev": "npm run migrate:dev -w backend",
     "db:seed": "npm run seed -w backend",
+    "db:ensure-admin": "npm run ensure-admin -w backend",
     "db:studio": "npm run studio -w backend"
   },
   "devDependencies": {

@@ -6,10 +6,11 @@ import { ProjectsPage } from "./pages/ProjectsPage.jsx";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage.jsx";
 import { EquipmentPage } from "./pages/EquipmentPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
+import { getAuthToken } from "./lib/auth.js";
 
 function ProtectedRoute({ children }) {
-  const email = localStorage.getItem("fiberops-user-email");
-  if (!email) {
+  const token = getAuthToken();
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
   return children;
