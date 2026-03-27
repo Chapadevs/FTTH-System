@@ -5,21 +5,3 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
 }
-
-.leaflet-control-zoom.leaflet-bar a {
-  width: 26px !important;
-  height: 26px !important;
-  line-height: 26px !important;
-  font-size: 14px !important;
-}
-.leaflet-control-zoom.leaflet-bar {
-  border-radius: 6px !important;
-  overflow: hidden;
-  border: 1px solid #b0b8c4 !important;
-}
-.leaflet-control-zoom.leaflet-bar a:first-child {
-  border-radius: 5px 5px 0 0 !important;
-}
-.leaflet-control-zoom.leaflet-bar a:last-child {
-  border-radius: 0 0 5px 5px !important;
-}

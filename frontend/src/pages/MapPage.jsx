@@ -32,19 +32,6 @@ export function MapPage() {
   }, []);
 
   const clearProjectFocus = useCallback(() => setProjectFocusRequest(null), []);
-  const handlePoleTypeCountsChange = useCallback((nextCounts) => {
-    setPoleTypeCounts((current) => {
-      if (
-        current.ote === nextCounts.ote
-        && current.distribution === nextCounts.distribution
-        && current.splitter === nextCounts.splitter
-        && current.total === nextCounts.total
-      ) {
-        return current;
-      }
-      return nextCounts;
-    });
-  }, []);
 
   return (
     <div
@@ -86,9 +73,29 @@ export function MapPage() {
             visibleProjectIds={visibleProjectIds}
             onVisibleChange={setVisibleProjectIds}
             onShowProjectOnMap={handleShowProjectOnMap}
-            onImport={() => setImportOpen(true)}
           />
         </div>
+        <button
+          onClick={() => setImportOpen(true)}
+          style={{
+            position: "absolute",
+            top: "1rem",
+            right: "1rem",
+            zIndex: 800,
+            padding: "0.38rem 0.72rem",
+            background: "#0f172a",
+            color: "white",
+            border: "none",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: "0.76rem",
+            letterSpacing: "0.02em",
+            boxShadow: "0 6px 14px rgba(15, 23, 42, 0.14)",
+          }}
+        >
+          Import
+        </button>
         <div
           style={{
             position: "relative",
@@ -103,7 +110,7 @@ export function MapPage() {
             selected={selected}
             poleTypeFilter={poleTypeFilter}
             setPoleTypeFilter={setPoleTypeFilter}
-            onPoleTypeCountsChange={handlePoleTypeCountsChange}
+            onPoleTypeCountsChange={setPoleTypeCounts}
             projectFocusRequest={projectFocusRequest}
             onProjectFocusConsumed={clearProjectFocus}
           />

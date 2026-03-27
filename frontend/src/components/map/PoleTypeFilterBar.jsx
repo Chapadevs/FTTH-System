@@ -85,7 +85,6 @@ export function PoleTypeFilterBar({ counts, poleTypeFilter, setPoleTypeFilter })
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
           gap: "0.35rem",
           flexWrap: "nowrap",
           overflowX: "auto",

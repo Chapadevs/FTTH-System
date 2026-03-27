@@ -21,7 +21,7 @@ const btnBase = {
   lineHeight: 1.1,
 };
 
-export function ProjectList({ visibleProjectIds = [], onVisibleChange, onShowProjectOnMap, onImport }) {
+export function ProjectList({ visibleProjectIds = [], onVisibleChange, onShowProjectOnMap }) {
   const queryClient = useQueryClient();
   const { data: projects } = useQuery(trpc.projects.list.queryOptions());
   const deleteAllProjects = useMutation(
@@ -89,25 +89,7 @@ export function ProjectList({ visibleProjectIds = [], onVisibleChange, onShowPro
         >
           Projects
         </span>
-        <div style={{ display: "flex", gap: "0.18rem", flexShrink: 0, alignItems: "center" }}>
-          {onImport && (
-            <button
-              type="button"
-              onClick={onImport}
-              style={{
-                ...btnBase,
-                background: "#0f172a",
-                color: "white",
-                fontWeight: 700,
-                borderRadius: "999px",
-                padding: "0.1rem 0.38rem",
-                fontSize: "0.55rem",
-                letterSpacing: "0.02em",
-              }}
-            >
-              Import
-            </button>
-          )}
+        <div style={{ display: "flex", gap: "0.18rem", flexShrink: 0 }}>
           {isFiltered && (
             <button type="button" onClick={showAll} style={{ ...btnBase, background: "#f1f5f9", color: "#334155" }}>
               All
