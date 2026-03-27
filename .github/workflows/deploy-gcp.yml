@@ -107,7 +107,7 @@ jobs:
               --allow-unauthenticated \
               --port 8080 \
               --add-cloudsql-instances="${{ secrets.CLOUDSQL_CONNECTION_NAME }}" \
-              --set-env-vars "DATABASE_URL=${{ steps.runtime_db.outputs.url }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
+              --set-env-vars "DATABASE_URL=${{ steps.runtime_db.outputs.url }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }},JWT_SECRET=${{ secrets.JWT_SECRET }},JWT_EXPIRES_IN=7d"
           else
             gcloud run deploy "${{ env.BACKEND_SERVICE }}" \
               --image "$IMAGE" \
@@ -117,7 +117,7 @@ jobs:
               --service-account "${{ env.BACKEND_RUNTIME_SA }}" \
               --allow-unauthenticated \
               --port 8080 \
-              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }}"
+              --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_IMPORTS=${{ secrets.GCS_BUCKET_IMPORTS }},GCS_BUCKET_PHOTOS=${{ secrets.GCS_BUCKET_PHOTOS }},JWT_SECRET=${{ secrets.JWT_SECRET }},JWT_EXPIRES_IN=7d"
           fi
 
       - name: Backend URL

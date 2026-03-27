@@ -18,8 +18,7 @@ export const protectedProcedure = t.procedure.use(async (opts) => {
   if (!opts.ctx.user) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
-      message:
-        "No user in the database. From the repo root run: npm run db:seed (Postgres must be up). Or set localStorage key fiberops-user-email to an email that exists in the User table.",
+      message: "Authentication required. Sign in to continue.",
     });
   }
   return opts.next({ ctx: { ...opts.ctx, user: opts.ctx.user } });

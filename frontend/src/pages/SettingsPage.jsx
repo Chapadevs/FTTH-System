@@ -1,13 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { trpc } from "../lib/trpc.js";
+import { clearAuthToken } from "../lib/auth.js";
 
 export function SettingsPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: user, isLoading } = useQuery(
     trpc.users.me.queryOptions()
   );
 
   if (isLoading) return <p>Loading...</p>;
-  const email = localStorage.getItem("fiberops-user-email");
+
+  const handleLogout = () => {
+    clearAuthToken();
+    queryClient.clear();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div>
@@ -26,9 +35,12 @@ export function SettingsPage() {
           <strong>Name:</strong> {user?.name ?? "—"}
         </p>
         <p style={{ margin: "0 0 0.25rem 0" }}>
-          <strong>Email:</strong> {user?.email ?? email ?? "—"}
+          <strong>Username:</strong> {user?.username ?? "—"}
         </p>
-        <p style={{ margin: 0 }}>
+        <p style={{ margin: "0 0 0.25rem 0" }}>
+          <strong>Email:</strong> {user?.email ?? "—"}
+        </p>
+        <p style={{ margin: "0 0 1rem 0" }}>
           <strong>Role:</strong>{" "}
           <span
             style={{
@@ -41,6 +53,21 @@ export function SettingsPage() {
             {user?.role ?? "—"}
           </span>
         </p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          style={{
+            padding: "0.5rem 1rem",
+            background: "#0f172a",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: 500,
+          }}
+        >
+          Sign Out
+        </button>
       </div>
     </div>
   );

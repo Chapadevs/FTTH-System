@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc.js";
+import { router, protectedProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
 
 export const equipmentRouter = router({
-  byProject: publicProcedure
+  byProject: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       return prisma.equipment.findMany({
@@ -12,7 +12,7 @@ export const equipmentRouter = router({
       });
     }),
 
-  list: publicProcedure.query(async () => {
+  list: protectedProcedure.query(async () => {
     return prisma.equipment.findMany({
       include: { pole: true, project: { select: { name: true, id: true } } },
       orderBy: { tag: "asc" },

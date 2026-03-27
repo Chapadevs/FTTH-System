@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, publicProcedure } from "../trpc.js";
+import { router, protectedProcedure } from "../trpc.js";
 import { prisma } from "../lib/prisma.js";
 import { getImportableSheetNames, previewExcelSheet } from "../services/excel-parser.js";
 import { downloadImportBuffer } from "../services/import-buffer-loader.js";
@@ -48,14 +48,14 @@ async function deleteProjectGraph(tx, projectId) {
 }
 
 export const projectsRouter = router({
-  list: publicProcedure.query(async () => {
+  list: protectedProcedure.query(async () => {
     return prisma.project.findMany({
       orderBy: { createdAt: "desc" },
       include: { createdBy: { select: { name: true, email: true } } },
     });
   }),
 
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       return prisma.project.findUnique({
@@ -70,7 +70,7 @@ export const projectsRouter = router({
     }),
 
   /** Bounding box of poles with valid coordinates; used to focus the map on a project. */
-  getMapBounds: publicProcedure
+  getMapBounds: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       const poles = await prisma.pole.findMany({
