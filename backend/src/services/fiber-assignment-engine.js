@@ -76,9 +76,11 @@ function normalizeColorCode(raw) {
   return null;
 }
 
-function parseConnection(raw) {
+/** Parse PRISM/Excel connection column: fusion splice, mechanical continuity, or dark/pass-through. */
+export function parseConnection(raw) {
   if (raw == null || typeof raw !== "string") return "DARK";
   const s = String(raw).trim().toUpperCase();
+  if (s.includes("MECHANICAL")) return "MECHANICAL";
   if (s.includes("FUSION") || s === "<- FUSION ->") return "FUSION";
   return "DARK";
 }
@@ -205,6 +207,7 @@ export function computeAssignmentSummary(records) {
     bag.fibers.push(r);
 
     const isFusion = r.connectionType === "FUSION";
+    const isMechanical = r.connectionType === "MECHANICAL";
     const hasWavelength = r.wavelength != null;
 
     if (isFusion) {
@@ -216,6 +219,17 @@ export function computeAssignmentSummary(records) {
           sheath: key,
           fiber: `${r.bufferColor}/${r.fiberColor}`,
           message: `Fused fiber ${r.fiberColor} in ${r.bufferColor} tube has no wavelength`,
+        });
+      }
+    } else if (isMechanical) {
+      darkCount++;
+      bag.dark++;
+      if (hasWavelength) {
+        inconsistencies.push({
+          type: "WAVELENGTH_WITHOUT_MECHANICAL",
+          sheath: key,
+          fiber: `${r.bufferColor}/${r.fiberColor}`,
+          message: `Mechanical continuity row ${r.fiberColor} in ${r.bufferColor} tube has wavelength (unexpected)`,
         });
       }
     } else {
@@ -236,6 +250,7 @@ export function computeAssignmentSummary(records) {
     bySheath: Object.fromEntries(bySheath),
     activeCount,
     darkCount,
+    mechanicalCount: records.filter((r) => r.connectionType === "MECHANICAL").length,
     inconsistencies,
     totalFiberColors: 12,
   };

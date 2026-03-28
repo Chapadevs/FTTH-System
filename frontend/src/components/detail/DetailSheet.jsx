@@ -281,6 +281,7 @@ function FiberRow({ fiber }) {
       <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
         {direction && <Badge tone="neutral">{direction}</Badge>}
         {fiber.wavelength != null && <Badge tone={statusTone}>{fiber.wavelength}</Badge>}
+        {fiber.logicalModeledFusion && <Badge tone="success">Modeled (splitter out)</Badge>}
       </div>
 
       <div
@@ -497,7 +498,11 @@ function MapPopoverSupplement({ data, poleDetail, compactActionSummaries, onNavi
         >
           <span>More details</span>
           <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
-            {summary?.needFusionOperationalCount ?? 0} fusion, {summary?.inconsistencyCount ?? 0} issues
+            {(summary?.needFusionOperationalCount ?? 0) || 0} field pending
+            {(summary?.logicalFusionModeledCount ?? 0) > 0
+              ? ` · ${summary.logicalFusionModeledCount} modeled`
+              : ""}
+            {` · ${summary?.inconsistencyCount ?? 0} data issues`}
           </span>
         </summary>
         <div style={{ padding: "0 0.75rem 0.75rem" }}>
@@ -515,9 +520,22 @@ function MapPopoverSupplement({ data, poleDetail, compactActionSummaries, onNavi
               marginTop: "0.7rem",
             }}
           >
-            <SummaryCard label="Need fusion (field)" value={summary?.needFusionOperationalCount ?? 0} tone="danger" />
+            <SummaryCard
+              label="Field fusions pending"
+              value={summary?.needFusionOperationalCount ?? 0}
+              tone="danger"
+            />
             <SummaryCard label="Data issues" value={summary?.inconsistencyCount ?? 0} tone="neutral" />
           </div>
+          {(summary?.logicalFusionModeledCount ?? 0) > 0 && (
+            <div style={{ marginTop: "0.5rem" }}>
+              <SummaryCard
+                label="Modeled splitter / design outs"
+                value={summary.logicalFusionModeledCount}
+                tone="success"
+              />
+            </div>
+          )}
 
           <div
             style={{
@@ -538,8 +556,8 @@ function MapPopoverSupplement({ data, poleDetail, compactActionSummaries, onNavi
               }}
             >
               {(summary?.actionCount ?? 0) > 0
-                ? `${summary?.needFusionOperationalCount ?? 0} pending`
-                : "No pending fusion work."}
+                ? `${summary?.needFusionOperationalCount ?? 0} field task(s) pending (excludes modeled splitter outs)`
+                : "No field fusion tasks pending."}
             </div>
             {(summary?.actionCount ?? 0) > 0 && compactActionSummaries.length > 0 && (
               <div
@@ -727,8 +745,15 @@ export function PoleDetailContent({ data, compact = false, onNavigateToPole, var
           >
             <SummaryCard label="Active fibers" value={poleDetail.summary.activeCount} tone="success" />
             <SummaryCard label="Dark fibers" value={poleDetail.summary.darkCount} tone="neutral" />
-            <SummaryCard label="Need fusion (field)" value={poleDetail.summary.needFusionOperationalCount} tone="danger" />
+            <SummaryCard label="Field fusions pending" value={poleDetail.summary.needFusionOperationalCount} tone="danger" />
             <SummaryCard label="Data issues" value={poleDetail.summary.inconsistencyCount} tone="neutral" />
+            {(poleDetail.summary.logicalFusionModeledCount ?? 0) > 0 && (
+              <SummaryCard
+                label="Modeled splitter outs"
+                value={poleDetail.summary.logicalFusionModeledCount}
+                tone="success"
+              />
+            )}
             <SummaryCard label="Sheaths" value={poleDetail.summary.sheathCount} tone="neutral" />
             <SummaryCard
               label="Fibers in data"
@@ -958,7 +983,10 @@ export function PoleDetailContent({ data, compact = false, onNavigateToPole, var
                   </div>
 
                   <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                    <Badge tone="danger">Need fusion {sheath.summary.needFusionOperationalCount}</Badge>
+                    <Badge tone="danger">Field pending {sheath.summary.needFusionOperationalCount}</Badge>
+                    {(sheath.summary.logicalFusionModeledCount ?? 0) > 0 && (
+                      <Badge tone="success">Modeled {sheath.summary.logicalFusionModeledCount}</Badge>
+                    )}
                     <Badge tone="neutral">Data issues {sheath.summary.inconsistencyCount}</Badge>
                     <Badge tone="success">Active {sheath.summary.activeCount}</Badge>
                     <Badge tone="neutral">Dark {sheath.summary.darkCount}</Badge>

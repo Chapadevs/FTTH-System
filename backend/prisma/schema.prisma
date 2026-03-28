@@ -194,6 +194,7 @@ enum FiberDirection {
 
 enum ConnectionType {
   FUSION
+  MECHANICAL
   DARK
 }
 

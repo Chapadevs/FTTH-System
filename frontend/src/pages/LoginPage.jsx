@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getAuthToken, setAuthToken } from "../lib/auth.js";
 
 export function LoginPage() {
-  const [username, setUsername] = useState("paudeinox");
+  const [username, setUsername] = useState(import.meta.env.DEV ? "dev" : "paudeinox");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +73,9 @@ export function LoginPage() {
           FiberOps
         </h1>
         <p style={{ color: "#64748b", marginBottom: "1rem", fontSize: "0.875rem" }}>
-          Sign in with the production admin account.
+          {import.meta.env.DEV
+            ? "Local dev: any username and password (starts a mock admin session)."
+            : "Sign in with your account."}
         </p>
         <form onSubmit={handleSubmit}>
           <label

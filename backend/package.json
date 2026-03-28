@@ -7,7 +7,7 @@
     "seed": "node prisma/seed.js"
   },
   "scripts": {
-    "dev": "node --watch src/index.js",
+    "dev": "cross-env NODE_ENV=development ALLOW_DEV_AUTH_MOCK=true node --watch src/index.js",
     "start": "node src/index.js",
     "test": "node --test src/services/excel-parser.test.js src/services/prism-parser.test.js src/services/fiber-assignment-engine.test.js src/services/fusion-planner.test.js src/services/import-buffer-loader.test.js src/services/project-import.test.js src/services/pole-detail.test.js src/services/reverse-geocode.test.js",
     "generate": "prisma generate",
@@ -33,6 +33,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "prisma": "^6.0.0"
   }
 }
