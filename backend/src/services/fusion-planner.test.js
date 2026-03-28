@@ -114,6 +114,43 @@ describe("fusion-planner", () => {
     assert.strictEqual(fiber.status, "INCONSISTENT");
   });
 
+  it("treats MECHANICAL continuity strands as not field-fusion work", () => {
+    const pole = { id: "pole-a", poleNumber: "MWC2302D018" };
+    const endpoint = { role: "END" };
+    const [fiber] = annotateFibersForPole({
+      pole,
+      endpoint,
+      fiberRecords: [
+        {
+          id: "fiber-mech",
+          bufferColor: "BROWN",
+          fiberColor: "GREEN",
+          bufferIndex: 2,
+          fiberIndex: 1,
+          direction: null,
+          wavelength: null,
+          connectionType: "MECHANICAL",
+          endpointObservations: [
+            {
+              poleId: "pole-a",
+              role: "END",
+              connectionType: "MECHANICAL",
+              rawConnection: "<- MECHANICAL ->",
+              wavelength: null,
+              deviceName: null,
+              portName: null,
+              state: "DARK",
+            },
+          ],
+          assignments: [],
+        },
+      ],
+    });
+
+    assert.strictEqual(fiber.pendingFieldFusion, false);
+    assert.strictEqual(fiber.operationalNeedFusion, false);
+  });
+
   it("does not create fusion tasks for DARK rows even with assignment metadata", () => {
     const pole = { id: "pole-13", poleNumber: "MWC23020013" };
     const endpoint = { role: "END" };

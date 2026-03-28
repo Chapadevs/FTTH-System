@@ -11,17 +11,22 @@ function formatBufferColorLabel(bufferColor) {
 }
 
 function mergeAnnotatedFiberPair(a, b) {
-  const operationalNeedFusion = a.operationalNeedFusion || b.operationalNeedFusion;
+  const pendingFieldFusion = a.pendingFieldFusion || b.pendingFieldFusion;
+  const logicalModeledFusion = a.logicalModeledFusion || b.logicalModeledFusion;
   const dataIssue = a.dataIssue || b.dataIssue;
-  const status = operationalNeedFusion
+  const status = pendingFieldFusion
     ? "INCONSISTENT"
     : a.status === "ACTIVE" && b.status === "ACTIVE"
       ? "ACTIVE"
-      : "DARK";
+      : logicalModeledFusion || a.logicalModeledFusion || b.logicalModeledFusion
+        ? "ACTIVE"
+        : "DARK";
 
   return {
     ...a,
-    operationalNeedFusion,
+    pendingFieldFusion,
+    logicalModeledFusion,
+    operationalNeedFusion: pendingFieldFusion,
     dataIssue,
     status,
   };
@@ -164,6 +169,8 @@ export function buildPoleDetail(pole) {
       acc.activeCount += sheath.summary.activeCount;
       acc.darkCount += sheath.summary.darkCount;
       acc.needFusionOperationalCount += sheath.summary.needFusionOperationalCount;
+      acc.pendingFieldFusionCount += sheath.summary.pendingFieldFusionCount ?? 0;
+      acc.logicalFusionModeledCount += sheath.summary.logicalFusionModeledCount ?? 0;
       acc.inconsistencyCount += sheath.summary.inconsistencyCount;
       acc.actionCount += sheath.actions.length;
       acc.fiberRecordCount += sheath.fibers.length;
@@ -174,6 +181,8 @@ export function buildPoleDetail(pole) {
       activeCount: 0,
       darkCount: 0,
       needFusionOperationalCount: 0,
+      pendingFieldFusionCount: 0,
+      logicalFusionModeledCount: 0,
       inconsistencyCount: 0,
       actionCount: 0,
       fiberRecordCount: 0,
@@ -200,7 +209,7 @@ export function buildPoleDetail(pole) {
     projectId: pole.projectId,
     summary: {
       ...overallSummary,
-      inconsistentCount: overallSummary.needFusionOperationalCount,
+      inconsistentCount: overallSummary.pendingFieldFusionCount,
       equipmentCount: (pole.equipment || []).length,
       connectedPoleCount: segmentNeighbors.length,
     },

@@ -203,7 +203,9 @@ function hasAssignmentData(record) {
 }
 
 function mergeConnectionType(currentType, nextType) {
-  return currentType === "FUSION" || nextType === "FUSION" ? "FUSION" : "DARK";
+  if (currentType === "FUSION" || nextType === "FUSION") return "FUSION";
+  if (currentType === "MECHANICAL" || nextType === "MECHANICAL") return "MECHANICAL";
+  return "DARK";
 }
 
 function pickPreferredValue(currentValue, nextValue) {
@@ -227,8 +229,9 @@ function endpointMatchesAssignment(endpoint, record) {
 
   const deviceKey = normalizeKey(record.deviceName);
   const poleKey = normalizeKey(endpoint.poleName);
-  if (deviceKey && poleKey && (deviceKey === poleKey || deviceKey.includes(poleKey))) {
-    return true;
+  if (deviceKey && poleKey) {
+    if (deviceKey === poleKey || deviceKey.includes(poleKey)) return true;
+    if (deviceKey.length >= 6 && poleKey.includes(deviceKey)) return true;
   }
 
   // Splice reports usually attach port/device metadata to the local enclosure.
@@ -237,6 +240,15 @@ function endpointMatchesAssignment(endpoint, record) {
 
 function deriveObservationState(record, endpoint) {
   const hasWavelength = record.wavelength != null;
+
+  if (record.connectionType === "MECHANICAL") {
+    if (endpointMatchesAssignment(endpoint, record)) {
+      return hasWavelength ? "ACTIVE" : "DARK";
+    }
+    if (hasWavelength) return "ACTIVE";
+    return "DARK";
+  }
+
   if (endpointMatchesAssignment(endpoint, record)) {
     if (record.connectionType === "FUSION") {
       return hasWavelength ? "ACTIVE" : "NEEDS_FUSION";

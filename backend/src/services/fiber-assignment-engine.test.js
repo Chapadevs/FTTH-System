@@ -100,6 +100,23 @@ describe("fiber-assignment-engine", () => {
     assert.strictEqual(records[0].portName, null);
   });
 
+  it("parses MECHANICAL continuity as distinct from fusion", () => {
+    const rows = [
+      ["BUFFER", "FIBER", "CONNECTION", "WAVELENGTH"],
+      ["BL", "OR", "<- MECHANICAL ->", "0"],
+      ["BL", "GR", "<- FUSION ->", ""],
+    ];
+    const { records } = parseFiberRows(rows);
+    assert.strictEqual(records.length, 2);
+    assert.strictEqual(records[0].connectionType, "MECHANICAL");
+    assert.strictEqual(records[0].wavelength, null);
+    assert.strictEqual(records[1].connectionType, "FUSION");
+    const summary = computeAssignmentSummary(records);
+    assert.strictEqual(summary.mechanicalCount, 1);
+    assert.strictEqual(summary.activeCount, 1);
+    assert.strictEqual(summary.darkCount, 1);
+  });
+
   it("parses fiber rows with buffer and fiber color codes", () => {
     const rows = [
       ["SHEATH NAME", "START ENCLOSURE", "END ENCLOSURE", "BUFFER", "FIBER", "CONNECTION", "WAVELENGTH"],

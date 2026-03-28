@@ -10,7 +10,11 @@ import { getRequestUser } from "./lib/request-user.js";
 import { prisma } from "./lib/prisma.js";
 import { signUserToken } from "./lib/auth-tokens.js";
 import { publicUserSelect } from "./lib/public-user.js";
+import { assertProdEnvSeparatesDevMock } from "./lib/env-guards.js";
+import { isDevelopmentAuthMock, resolveDevMockAdminUser } from "./lib/dev-auth-mock.js";
 import { saveLocalImportBuffer, useLocalImportStorage } from "./services/local-import-storage.js";
+
+assertProdEnvSeparatesDevMock();
 
 const app = express();
 app.use(cors());
@@ -27,6 +31,13 @@ app.post("/api/auth/login", async (req, res) => {
 
   if (!username || !password) {
     res.status(400).json({ error: "Username and password are required." });
+    return;
+  }
+
+  if (isDevelopmentAuthMock()) {
+    const safeUser = await resolveDevMockAdminUser();
+    const token = await signUserToken(safeUser.id);
+    res.json({ token, user: safeUser });
     return;
   }
 
